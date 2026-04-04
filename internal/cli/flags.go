@@ -1,0 +1,156 @@
+package cli
+
+import (
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+
+	"cmd-mint/internal/model"
+)
+
+const (
+	defaultMaxAliases   = 25
+	defaultMinFrequency = 3
+)
+
+type Options struct {
+	HistoryFiles []string
+	Shell        model.Shell
+	OutputDir    string
+	MaxAliases   int
+	MinFrequency int
+	NoAliasFile  bool
+	JSON         bool
+	Verbose      bool
+	ShowVersion  bool
+	ShowHelp     bool
+}
+
+type parseResult struct {
+	Options Options
+	Help    bool
+}
+
+type repeatedStringFlag []string
+
+func (f *repeatedStringFlag) String() string {
+	return strings.Join(*f, ",")
+}
+
+func (f *repeatedStringFlag) Set(value string) error {
+	*f = append(*f, value)
+	return nil
+}
+
+func parseFlags(args []string, stderr io.Writer) (parseResult, error) {
+	opts := Options{
+		Shell:        model.ShellAuto,
+		MaxAliases:   defaultMaxAliases,
+		MinFrequency: defaultMinFrequency,
+	}
+
+	fs := flag.NewFlagSet("cmd-mint", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.Usage = func() {
+		fmt.Fprint(fs.Output(), helpText())
+	}
+
+	var historyFiles repeatedStringFlag
+	fs.Var(&historyFiles, "history-file", "history file to scan; repeat for multiple files")
+	shell := fs.String("shell", string(opts.Shell), "shell format for explicit history files: bash, zsh, fish, or auto")
+	fs.StringVar(&opts.OutputDir, "output-dir", "", "directory for generated artifacts")
+	fs.IntVar(&opts.MaxAliases, "max-aliases", opts.MaxAliases, "maximum alias suggestions to write")
+	fs.IntVar(&opts.MinFrequency, "min-frequency", opts.MinFrequency, "minimum command frequency for alias eligibility")
+	fs.BoolVar(&opts.NoAliasFile, "no-alias-file", false, "do not generate alias snippet files")
+	fs.BoolVar(&opts.JSON, "json", false, "also write safe report.json")
+	fs.BoolVar(&opts.Verbose, "verbose", false, "print extra safe parsing and exclusion summary information")
+	fs.BoolVar(&opts.ShowVersion, "version", false, "print version information and exit")
+	fs.BoolVar(&opts.ShowHelp, "help", false, "print help and exit")
+	fs.BoolVar(&opts.ShowHelp, "h", false, "print help and exit")
+
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return parseResult{Options: opts, Help: true}, nil
+		}
+		return parseResult{}, err
+	}
+
+	opts.HistoryFiles = append([]string(nil), historyFiles...)
+	opts.Shell = model.Shell(*shell)
+	if opts.ShowHelp {
+		return parseResult{Options: opts, Help: true}, nil
+	}
+
+	if err := validateOptions(opts); err != nil {
+		return parseResult{}, err
+	}
+
+	return parseResult{Options: opts}, nil
+}
+
+func validateOptions(opts Options) error {
+	switch opts.Shell {
+	case model.ShellAuto, model.ShellBash, model.ShellZsh, model.ShellFish:
+	default:
+		return fmt.Errorf("--shell must be one of bash, zsh, fish, or auto")
+	}
+
+	if opts.MinFrequency < 1 {
+		return fmt.Errorf("--min-frequency must be >= 1")
+	}
+
+	if opts.MaxAliases < 0 {
+		return fmt.Errorf("--max-aliases must be >= 0")
+	}
+
+	for _, path := range opts.HistoryFiles {
+		if err := validateReadableFile(path); err != nil {
+			return fmt.Errorf("--history-file %q: %w", path, err)
+		}
+	}
+
+	if opts.OutputDir != "" {
+		if err := validateOutputDirPath(opts.OutputDir); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateReadableFile(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("path must not be empty")
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("must be a readable regular file")
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	return file.Close()
+}
+
+func validateOutputDirPath(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("--output-dir %q: %w", path, err)
+	}
+	if info.Mode().IsRegular() {
+		return fmt.Errorf("--output-dir %q must not be an existing regular file", path)
+	}
+	return nil
+}
