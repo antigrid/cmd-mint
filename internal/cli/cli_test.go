@@ -181,6 +181,28 @@ func TestValidationRejectsOutputDirExistingRegularFile(t *testing.T) {
 	}
 }
 
+func TestOutputDirExistingRegularFileExitsCode3(t *testing.T) {
+	dir := t.TempDir()
+	outputFile := filepath.Join(dir, "report")
+	if err := os.WriteFile(outputFile, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("WriteFile(%q) error = %v", outputFile, err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run([]string{"--output-dir", outputFile}, &stdout, &stderr, version.BuildInfo{})
+
+	if code != ExitOutputError {
+		t.Fatalf("Run(output regular file) exit code = %d, want %d", code, ExitOutputError)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "output error") {
+		t.Fatalf("stderr = %q, want output error", stderr.String())
+	}
+}
+
 func TestHelpTextIncludesMVPFlagsAndExcludesDeferredFlags(t *testing.T) {
 	text := helpText()
 

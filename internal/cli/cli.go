@@ -1,15 +1,22 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
+	"cmd-mint/internal/output"
 	"cmd-mint/internal/version"
 )
 
 func Run(args []string, stdout io.Writer, stderr io.Writer, build version.BuildInfo) int {
 	result, err := parseFlags(args, stderr)
 	if err != nil {
+		var outputErr *output.Error
+		if errors.As(err, &outputErr) {
+			fmt.Fprintf(stderr, "cmd-mint: output error: %v\n", err)
+			return ExitOutputError
+		}
 		fmt.Fprintf(stderr, "cmd-mint: invalid arguments: %v\n", err)
 		return ExitInvalidArgs
 	}

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"cmd-mint/internal/model"
+	"cmd-mint/internal/output"
 )
 
 const (
@@ -147,10 +148,18 @@ func validateOutputDirPath(path string) error {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return fmt.Errorf("--output-dir %q: %w", path, err)
+		return outputPathError(path, err)
 	}
 	if info.Mode().IsRegular() {
-		return fmt.Errorf("--output-dir %q must not be an existing regular file", path)
+		return outputPathError(path, fmt.Errorf("must not be an existing regular file"))
 	}
 	return nil
+}
+
+func outputPathError(path string, err error) error {
+	return &output.Error{
+		Op:   "validate --output-dir",
+		Path: path,
+		Err:  err,
+	}
 }
