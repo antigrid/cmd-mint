@@ -65,6 +65,27 @@ func TestUnknownFlag(t *testing.T) {
 	}
 }
 
+func TestNoHistorySourcesExitsCode1(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HISTFILE", "")
+	t.Setenv("SHELL", "")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run(nil, &stdout, &stderr, version.BuildInfo{})
+
+	if code != ExitNoInput {
+		t.Fatalf("Run(no history sources) exit code = %d, want %d", code, ExitNoInput)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "No supported shell history files found.") {
+		t.Fatalf("stderr = %q, want no-history message", stderr.String())
+	}
+}
+
 func TestRepeatableHistoryFilesArePreserved(t *testing.T) {
 	dir := t.TempDir()
 	first := writeTempHistoryFile(t, dir, "zsh.history")

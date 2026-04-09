@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"cmd-mint/internal/discovery"
 	"cmd-mint/internal/output"
 	"cmd-mint/internal/version"
 )
@@ -29,6 +30,19 @@ func Run(args []string, stdout io.Writer, stderr io.Writer, build version.BuildI
 	if result.Options.ShowVersion {
 		fmt.Fprintln(stdout, build.String())
 		return ExitOK
+	}
+
+	_, err = discovery.DiscoverHistorySources(discovery.Options{
+		HistoryFiles: result.Options.HistoryFiles,
+		Shell:        result.Options.Shell,
+	})
+	if err != nil {
+		if errors.Is(err, discovery.ErrNoUsableSources) {
+			fmt.Fprint(stderr, discovery.NoSourcesMessage())
+			return ExitNoInput
+		}
+		fmt.Fprintf(stderr, "cmd-mint: internal error: %v\n", err)
+		return ExitInternalError
 	}
 
 	fmt.Fprintln(stderr, "cmd-mint scaffold: history analysis is not implemented yet")

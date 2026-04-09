@@ -66,6 +66,11 @@ type CommandRecord struct {
 	ExclusionReasons  []ExclusionReason `json:"exclusion_reasons,omitempty"`
 }
 
+type HistorySource struct {
+	SourceShell Shell
+	SourceFile  string
+}
+
 type SourceSummary struct {
 	SourceShell    Shell    `json:"source_shell"`
 	SourceFile     string   `json:"source_file"`

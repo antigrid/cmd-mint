@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"cmd-mint/internal/discovery"
 	"cmd-mint/internal/model"
 	"cmd-mint/internal/output"
 )
@@ -108,7 +109,7 @@ func validateOptions(opts Options) error {
 	}
 
 	for _, path := range opts.HistoryFiles {
-		if err := validateReadableFile(path); err != nil {
+		if err := discovery.ValidateReadableHistoryFile(path); err != nil {
 			return fmt.Errorf("--history-file %q: %w", path, err)
 		}
 	}
@@ -120,26 +121,6 @@ func validateOptions(opts Options) error {
 	}
 
 	return nil
-}
-
-func validateReadableFile(path string) error {
-	if strings.TrimSpace(path) == "" {
-		return fmt.Errorf("path must not be empty")
-	}
-
-	info, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("must be a readable regular file")
-	}
-
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	return file.Close()
 }
 
 func validateOutputDirPath(path string) error {
