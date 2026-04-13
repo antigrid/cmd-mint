@@ -1,0 +1,3 @@
+git status
+npm run build
+# keep this comment-shaped command
