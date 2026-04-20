@@ -35,12 +35,30 @@ func AnalyzeCommand(raw string) CommandAnalysis {
 }
 
 func AnalyzeRecord(record model.CommandRecord) model.CommandRecord {
+	rawSensitivity := ClassifyRawSensitivity(record.RawCommand)
 	analysis := AnalyzeCommand(record.RawCommand)
+	record.IsMultiline = analysis.IsMultiline
+	record.SensitivityFlags = appendSensitivityFlags(record.SensitivityFlags, rawSensitivity.Flags...)
+	record.ExclusionReasons = appendExclusionReasons(record.ExclusionReasons, rawSensitivity.Reasons...)
+
+	normalizedSensitivity := ClassifyNormalizedSensitivity(analysis.NormalizedCommand, analysis.Tokens)
+	record.SensitivityFlags = appendSensitivityFlags(record.SensitivityFlags, normalizedSensitivity.Flags...)
+	record.ExclusionReasons = appendExclusionReasons(record.ExclusionReasons, normalizedSensitivity.Reasons...)
+
+	if IsSensitiveRecord(record) {
+		record.NormalizedCommand = ""
+		record.DisplayCommand = ""
+		record.Tokens = nil
+		record.Tool = ""
+		record.Subcommand = ""
+		return record
+	}
+
 	record.NormalizedCommand = analysis.NormalizedCommand
+	record.DisplayCommand = analysis.NormalizedCommand
 	record.Tokens = analysis.Tokens
 	record.Tool = analysis.Tool
 	record.Subcommand = analysis.Subcommand
-	record.IsMultiline = analysis.IsMultiline
 	return record
 }
 
@@ -91,4 +109,36 @@ func NormalizeCommand(raw string) NormalizedCommand {
 		Command:     strings.TrimSpace(builder.String()),
 		IsMultiline: isMultiline,
 	}
+}
+
+func appendSensitivityFlags(existing []model.SensitivityFlag, additions ...model.SensitivityFlag) []model.SensitivityFlag {
+	for _, addition := range additions {
+		seen := false
+		for _, value := range existing {
+			if value == addition {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			existing = append(existing, addition)
+		}
+	}
+	return existing
+}
+
+func appendExclusionReasons(existing []model.ExclusionReason, additions ...model.ExclusionReason) []model.ExclusionReason {
+	for _, addition := range additions {
+		seen := false
+		for _, value := range existing {
+			if value == addition {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			existing = append(existing, addition)
+		}
+	}
+	return existing
 }

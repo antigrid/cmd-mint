@@ -58,6 +58,9 @@ type SafeCommandSummary struct {
 }
 
 func SafeCommandFromRecord(record CommandRecord, count int, sourceShells []Shell) (SafeCommandSummary, bool) {
+	if recordHasSensitiveExclusion(record) {
+		return SafeCommandSummary{}, false
+	}
 	if record.DisplayCommand == "" {
 		return SafeCommandSummary{}, false
 	}
@@ -70,6 +73,25 @@ func SafeCommandFromRecord(record CommandRecord, count int, sourceShells []Shell
 		Subcommand:        record.Subcommand,
 		SourceShells:      append([]Shell(nil), sourceShells...),
 	}, true
+}
+
+func recordHasSensitiveExclusion(record CommandRecord) bool {
+	if len(record.SensitivityFlags) > 0 {
+		return true
+	}
+
+	for _, reason := range record.ExclusionReasons {
+		switch reason {
+		case ExclusionSensitiveSecret,
+			ExclusionSensitiveCredentialFile,
+			ExclusionSensitiveDatabaseURL,
+			ExclusionSensitiveAuthHeader,
+			ExclusionSensitivePrivateKey,
+			ExclusionSensitiveClipboardOrKeychain:
+			return true
+		}
+	}
+	return false
 }
 
 type SubcommandSummary struct {

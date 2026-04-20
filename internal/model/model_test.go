@@ -94,6 +94,20 @@ func TestSafeReportJSONDoesNotSerializeRawCommand(t *testing.T) {
 	assertJSONOmitsRawCommand(t, string(data))
 }
 
+func TestSafeCommandFromRecordRejectsSensitiveRecord(t *testing.T) {
+	record := CommandRecord{
+		RawCommand:        fakeRawCommand,
+		NormalizedCommand: `curl -H "Authorization: Bearer raw-secret-token" https://example.invalid`,
+		DisplayCommand:    `curl -H "Authorization: Bearer raw-secret-token" https://example.invalid`,
+		SensitivityFlags:  []SensitivityFlag{SensitivityAuthHeader},
+		ExclusionReasons:  []ExclusionReason{ExclusionSensitiveAuthHeader},
+	}
+
+	if safeCommand, ok := SafeCommandFromRecord(record, 1, []Shell{ShellZsh}); ok {
+		t.Fatalf("SafeCommandFromRecord() = %#v, true; want false for sensitive record", safeCommand)
+	}
+}
+
 func TestSafeReportStructsDoNotContainRawCommandField(t *testing.T) {
 	types := []reflect.Type{
 		reflect.TypeOf(Report{}),
