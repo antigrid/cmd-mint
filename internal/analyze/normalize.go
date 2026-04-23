@@ -54,6 +54,10 @@ func AnalyzeRecord(record model.CommandRecord) model.CommandRecord {
 		return record
 	}
 
+	risk := ClassifyRisk(analysis.NormalizedCommand, analysis.Tokens)
+	record.RiskFlags = appendRiskFlags(record.RiskFlags, risk.Flags...)
+	record.ExclusionReasons = appendExclusionReasons(record.ExclusionReasons, risk.Reasons...)
+
 	record.NormalizedCommand = analysis.NormalizedCommand
 	record.DisplayCommand = analysis.NormalizedCommand
 	record.Tokens = analysis.Tokens
@@ -112,6 +116,22 @@ func NormalizeCommand(raw string) NormalizedCommand {
 }
 
 func appendSensitivityFlags(existing []model.SensitivityFlag, additions ...model.SensitivityFlag) []model.SensitivityFlag {
+	for _, addition := range additions {
+		seen := false
+		for _, value := range existing {
+			if value == addition {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			existing = append(existing, addition)
+		}
+	}
+	return existing
+}
+
+func appendRiskFlags(existing []model.RiskFlag, additions ...model.RiskFlag) []model.RiskFlag {
 	for _, addition := range additions {
 		seen := false
 		for _, value := range existing {
