@@ -113,6 +113,7 @@ type ExclusionSummary struct {
 	MultilineCommandCount    int                     `json:"multiline_command_count,omitempty"`
 	LowFrequencyCommandCount int                     `json:"low_frequency_command_count,omitempty"`
 	TooShortCommandCount     int                     `json:"too_short_command_count,omitempty"`
+	MalformedCommandCount    int                     `json:"malformed_command_count,omitempty"`
 }
 
 type Warning struct {
