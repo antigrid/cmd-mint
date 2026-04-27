@@ -121,6 +121,7 @@ func TestSafeReportStructsDoNotContainRawCommandField(t *testing.T) {
 		reflect.TypeOf(PatternSummary{}),
 		reflect.TypeOf(ExclusionSummary{}),
 		reflect.TypeOf(Warning{}),
+		reflect.TypeOf(ExistingAliasDefinition{}),
 	}
 
 	for _, typ := range types {

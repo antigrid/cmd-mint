@@ -92,3 +92,17 @@ type AliasSuggestion struct {
 	SourceShells         []Shell           `json:"source_shells,omitempty"`
 	ExclusionReasons     []ExclusionReason `json:"exclusion_reasons,omitempty"`
 }
+
+type ExistingAliasKind string
+
+const (
+	ExistingAliasKindShellAlias       ExistingAliasKind = "shell_alias"
+	ExistingAliasKindFishAbbreviation ExistingAliasKind = "fish_abbreviation"
+)
+
+type ExistingAliasDefinition struct {
+	Name        string            `json:"name"`
+	SourceShell Shell             `json:"source_shell"`
+	SourceFile  string            `json:"source_file"`
+	Kind        ExistingAliasKind `json:"kind"`
+}
