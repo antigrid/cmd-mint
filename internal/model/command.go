@@ -90,6 +90,7 @@ type AliasSuggestion struct {
 	Confidence           Confidence        `json:"confidence"`
 	Reason               string            `json:"reason,omitempty"`
 	SourceShells         []Shell           `json:"source_shells,omitempty"`
+	AliasFileEligible    bool              `json:"alias_file_eligible,omitempty"`
 	ExclusionReasons     []ExclusionReason `json:"exclusion_reasons,omitempty"`
 }
 
