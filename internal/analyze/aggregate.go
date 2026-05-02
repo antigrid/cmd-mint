@@ -46,6 +46,7 @@ type AggregateResult struct {
 	ToolAggregates    map[string]*ToolAggregate
 	Commands          []CommandAggregate
 	Tools             []ToolAggregate
+	Patterns          []model.PatternSummary
 	Sources           []model.SourceSummary
 	Summary           model.AggregateSummary
 	Exclusions        model.ExclusionSummary
@@ -145,6 +146,7 @@ func (builder *AggregateBuilder) Result() AggregateResult {
 	commands := SortedCommandAggregates(builder.commands)
 	tools := SortedToolAggregates(builder.tools)
 	toolSummaries := ToolSummariesFromAggregates(tools)
+	patterns := GeneratePatternsFromCommands(commands)
 
 	summary := builder.summary
 	summary.TopTools = toolSummaries
@@ -154,6 +156,7 @@ func (builder *AggregateBuilder) Result() AggregateResult {
 		ToolAggregates:    cloneToolAggregateMap(builder.tools),
 		Commands:          commands,
 		Tools:             tools,
+		Patterns:          patterns,
 		Sources:           cloneSourceSummaries(builder.sources),
 		Summary:           summary,
 		Exclusions:        exclusions,
