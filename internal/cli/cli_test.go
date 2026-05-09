@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"cmd-mint/internal/model"
+	"cmd-mint/internal/output"
 	"cmd-mint/internal/version"
 )
 
@@ -221,6 +222,121 @@ func TestOutputDirExistingRegularFileExitsCode3(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "output error") {
 		t.Fatalf("stderr = %q, want output error", stderr.String())
+	}
+}
+
+func TestRunPipelineWithFixtureHistoriesWritesExpectedFilesAndSummary(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HISTFILE", "")
+	t.Setenv("SHELL", "")
+
+	dir := t.TempDir()
+	outputDir := filepath.Join(dir, "report")
+	zshHistory := filepath.Join("..", "..", "internal", "testdata", "histories", "zsh_plain_history")
+	bashHistory := filepath.Join("..", "..", "internal", "testdata", "histories", "bash_plain_history")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run([]string{
+		"--history-file", zshHistory,
+		"--history-file", bashHistory,
+		"--output-dir", outputDir,
+		"--min-frequency", "2",
+		"--json",
+	}, &stdout, &stderr, version.BuildInfo{})
+
+	if code != ExitOK {
+		t.Fatalf("Run(pipeline) exit code = %d, want %d\nstderr:\n%s", code, ExitOK, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+
+	for _, name := range []string{
+		output.ArtifactCheatsheet,
+		output.ArtifactAliasesSH,
+		output.ArtifactReportJSON,
+	} {
+		if _, err := os.Stat(filepath.Join(outputDir, name)); err != nil {
+			t.Fatalf("expected generated file %s: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, output.ArtifactAliasesFish)); !os.IsNotExist(err) {
+		t.Fatalf("fish aliases should not be generated for bash/zsh fixtures: %v", err)
+	}
+
+	summary := stdout.String()
+	for _, want := range []string{
+		"cmd-mint: analyzed shell history locally",
+		"Sources scanned:",
+		"parsed 3 / skipped 0",
+		"Safe commands analyzed: 6",
+		"Top tools:",
+		"git",
+		"Top alias suggestions:",
+		"alias gs='git status'",
+		"Generated:",
+		output.ArtifactCheatsheet,
+		output.ArtifactAliasesSH,
+		output.ArtifactReportJSON,
+		"Generated locally from shell history. Review before sharing or committing.",
+	} {
+		if !strings.Contains(summary, want) {
+			t.Fatalf("terminal summary missing %q:\n%s", want, summary)
+		}
+	}
+}
+
+func TestRunPipelineOmitsRawSensitiveCommandsFromSummaryAndArtifacts(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HISTFILE", "")
+	t.Setenv("SHELL", "")
+
+	dir := t.TempDir()
+	history := filepath.Join(dir, "zsh.history")
+	sensitive := `curl -H "Authorization: Bearer raw-secret-token" https://example.invalid`
+	content := strings.Join([]string{
+		"git status",
+		"git status",
+		"git status",
+		sensitive,
+	}, "\n") + "\n"
+	if err := os.WriteFile(history, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile(%q) error = %v", history, err)
+	}
+
+	outputDir := filepath.Join(dir, "report")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run([]string{
+		"--history-file", history,
+		"--shell", "zsh",
+		"--output-dir", outputDir,
+		"--json",
+	}, &stdout, &stderr, version.BuildInfo{})
+
+	if code != ExitOK {
+		t.Fatalf("Run(sensitive pipeline) exit code = %d, want %d\nstderr:\n%s", code, ExitOK, stderr.String())
+	}
+
+	outputs := []string{stdout.String(), stderr.String()}
+	for _, name := range []string{output.ArtifactCheatsheet, output.ArtifactAliasesSH, output.ArtifactReportJSON} {
+		data, err := os.ReadFile(filepath.Join(outputDir, name))
+		if err != nil {
+			t.Fatalf("ReadFile(%s) error = %v", name, err)
+		}
+		outputs = append(outputs, string(data))
+	}
+
+	for _, text := range outputs {
+		for _, forbidden := range []string{sensitive, "raw-secret-token", "Authorization: Bearer"} {
+			if strings.Contains(text, forbidden) {
+				t.Fatalf("output contains forbidden sensitive text %q:\n%s", forbidden, text)
+			}
+		}
+	}
+	if !strings.Contains(stdout.String(), "Sensitive-looking commands skipped: 1") {
+		t.Fatalf("terminal summary missing sensitive aggregate:\n%s", stdout.String())
 	}
 }
 
