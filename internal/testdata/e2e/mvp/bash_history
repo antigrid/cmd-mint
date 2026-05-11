@@ -1,0 +1,13 @@
+#1800000100
+npm run build
+#1800000101
+npm run build
+#1800000102
+npm run build
+#1800000103
+npm run build
+go test ./...
+go test ./...
+go test ./...
+AWS_SECRET_ACCESS_KEY=e2e-secret terraform plan
+ssh -i ~/.ssh/id_rsa example.invalid

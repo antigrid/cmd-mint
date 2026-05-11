@@ -1,0 +1,12 @@
+: 1800000000:0;git status
+: 1800000001:0;git status
+: 1800000002:0;git status
+: 1800000003:0;docker ps
+: 1800000004:0;docker ps
+: 1800000005:0;docker ps
+: 1800000006:0;kubectl get pods -n dev
+: 1800000007:0;kubectl get pods -n prod
+: 1800000008:0;curl -H "Authorization: Bearer e2e-raw-secret-token" https://example.invalid
+: bad:0;echo password=e2e-password
+rm -rf /tmp/cmd-mint-e2e
+kubectl delete pod old-worker -n production

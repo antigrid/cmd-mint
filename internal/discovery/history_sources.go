@@ -92,7 +92,7 @@ func NoSourcesMessage() string {
 
 func sourceFromCandidate(candidate candidate) (model.HistorySource, string, bool) {
 	absPath, ok := absoluteCleanPath(candidate.path)
-	if !ok || !isReadableRegularFile(absPath) {
+	if !ok || !isExistingRegularFile(absPath) {
 		return model.HistorySource{}, "", false
 	}
 
@@ -140,17 +140,12 @@ func canonicalKey(path string) string {
 	return filepath.Clean(path)
 }
 
-func isReadableRegularFile(path string) bool {
+func isExistingRegularFile(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() {
 		return false
 	}
-
-	file, err := os.Open(path)
-	if err != nil {
-		return false
-	}
-	return file.Close() == nil
+	return true
 }
 
 func inferShell(path string, fallback model.Shell, currentShell string, kind sourceKind) model.Shell {
