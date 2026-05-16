@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"cmd-mint/internal/model"
 	"cmd-mint/internal/output"
@@ -66,6 +67,28 @@ func TestUnknownFlag(t *testing.T) {
 	}
 }
 
+func TestUnexpectedPositionalArgument(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run([]string{"unexpected"}, &stdout, &stderr, version.BuildInfo{})
+
+	if code != ExitInvalidArgs {
+		t.Fatalf("Run(positional arg) exit code = %d, want %d", code, ExitInvalidArgs)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	for _, want := range []string{
+		"cmd-mint: invalid arguments:",
+		"unexpected positional argument: unexpected",
+	} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Fatalf("stderr = %q, want substring %q", stderr.String(), want)
+		}
+	}
+}
+
 func TestNoHistorySourcesExitsCode1(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("HISTFILE", "")
@@ -103,6 +126,53 @@ func TestRepeatableHistoryFilesArePreserved(t *testing.T) {
 	want := []string{first, second}
 	if strings.Join(result.Options.HistoryFiles, "\x00") != strings.Join(want, "\x00") {
 		t.Fatalf("HistoryFiles = %#v, want %#v", result.Options.HistoryFiles, want)
+	}
+}
+
+func TestRunnerUsesInjectedClockForDefaultOutput(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HISTFILE", "")
+	t.Setenv("SHELL", "")
+
+	dir := t.TempDir()
+	history := writeTempHistoryFile(t, dir, "bash.history")
+	runRoot := t.TempDir()
+	oldwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd() error = %v", err)
+	}
+	if err := os.Chdir(runRoot); err != nil {
+		t.Fatalf("Chdir(%q) error = %v", runRoot, err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(oldwd)
+	})
+
+	fixed := time.Date(2026, 6, 1, 14, 30, 22, 0, time.Local)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Runner{
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Now:    func() time.Time { return fixed },
+	}.Run([]string{
+		"--history-file", history,
+		"--shell", "bash",
+	})
+
+	if code != ExitOK {
+		t.Fatalf("Runner.Run(default output) exit code = %d, want %d\nstderr:\n%s", code, ExitOK, stderr.String())
+	}
+	outputDir := filepath.Join(runRoot, output.DefaultDirectoryName(fixed))
+	markdown, err := os.ReadFile(filepath.Join(outputDir, output.ArtifactCheatsheet))
+	if err != nil {
+		t.Fatalf("ReadFile(cheatsheet) error = %v", err)
+	}
+	if !strings.Contains(string(markdown), "Generated locally by cmd-mint on 2026-06-01 14:30:22.") {
+		t.Fatalf("cheatsheet does not use injected timestamp:\n%s", markdown)
+	}
+	if !strings.Contains(stdout.String(), filepath.Join(".", output.DefaultDirectoryName(fixed), output.ArtifactCheatsheet)) {
+		t.Fatalf("stdout missing deterministic output path:\n%s", stdout.String())
 	}
 }
 

@@ -79,6 +79,9 @@ func parseFlags(args []string, stderr io.Writer) (parseResult, error) {
 		}
 		return parseResult{}, err
 	}
+	if fs.NArg() > 0 {
+		return parseResult{}, fmt.Errorf("unexpected positional argument: %s", fs.Arg(0))
+	}
 
 	opts.HistoryFiles = append([]string(nil), historyFiles...)
 	opts.Shell = model.Shell(*shell)

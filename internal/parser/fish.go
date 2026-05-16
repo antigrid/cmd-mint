@@ -20,7 +20,16 @@ type fishRecord struct {
 	timestamp *time.Time
 	index     int
 	malformed bool
+	block     fishBlockStyle
 }
+
+type fishBlockStyle int
+
+const (
+	fishBlockNone fishBlockStyle = iota
+	fishBlockLiteral
+	fishBlockFolded
+)
 
 func ParseFishFile(path string) (Result, error) {
 	file, err := os.Open(path)
@@ -71,6 +80,10 @@ func ParseFish(r io.Reader, sourceFile string) (Result, error) {
 				command: command,
 				index:   result.Summary.EntriesRead,
 			}
+			if block, ok := parseFishBlockStyle(command); ok {
+				current.command = ""
+				current.block = block
+			}
 		} else if current != nil {
 			applyFishRecordLine(current, line)
 		} else if strings.TrimSpace(line) != "" {
@@ -103,21 +116,56 @@ func parseFishCommandLine(line string) (string, bool) {
 	return strings.TrimSpace(trimmed[len(prefix):]), true
 }
 
+func parseFishBlockStyle(command string) (fishBlockStyle, bool) {
+	switch strings.TrimSpace(command) {
+	case "|":
+		return fishBlockLiteral, true
+	case ">":
+		return fishBlockFolded, true
+	default:
+		return fishBlockNone, false
+	}
+}
+
 func applyFishRecordLine(record *fishRecord, line string) {
 	trimmed := strings.TrimLeft(line, " \t")
 	switch {
 	case strings.HasPrefix(trimmed, "when:"):
+		record.block = fishBlockNone
 		timestamp, ok := parseFishTimestamp(strings.TrimSpace(trimmed[len("when:"):]))
 		if !ok {
 			record.malformed = true
 			return
 		}
 		record.timestamp = timestamp
+	case strings.HasPrefix(trimmed, "paths:"):
+		record.block = fishBlockNone
+	case record.block != fishBlockNone:
+		if isFishIndented(line) || strings.TrimSpace(line) == "" {
+			appendFishBlockCommandLine(record, line)
+			return
+		}
+		record.block = fishBlockNone
 	case strings.TrimSpace(line) == "":
 		return
 	case isFishCommandContinuation(line):
 		record.command += "\n" + strings.TrimSpace(line)
 	}
+}
+
+func appendFishBlockCommandLine(record *fishRecord, line string) {
+	content := ""
+	if strings.TrimSpace(line) != "" {
+		content = strings.TrimLeft(line, " \t")
+	}
+	if record.command != "" {
+		record.command += "\n"
+	}
+	record.command += content
+}
+
+func isFishIndented(line string) bool {
+	return len(line) > 0 && (line[0] == ' ' || line[0] == '\t')
 }
 
 func isFishCommandContinuation(line string) bool {

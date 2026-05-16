@@ -17,6 +17,37 @@ import (
 )
 
 func Run(args []string, stdout io.Writer, stderr io.Writer, build version.BuildInfo) int {
+	return Runner{
+		Stdout: stdout,
+		Stderr: stderr,
+		Build:  build,
+	}.Run(args)
+}
+
+type Runner struct {
+	Stdout io.Writer
+	Stderr io.Writer
+	Now    func() time.Time
+	Build  version.BuildInfo
+}
+
+func (r Runner) Run(args []string) int {
+	stdout := r.Stdout
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	stderr := r.Stderr
+	if stderr == nil {
+		stderr = io.Discard
+	}
+	now := r.Now
+	if now == nil {
+		now = time.Now
+	}
+	return run(args, stdout, stderr, r.Build, now)
+}
+
+func run(args []string, stdout io.Writer, stderr io.Writer, build version.BuildInfo, nowFunc func() time.Time) int {
 	result, err := parseFlags(args, stderr)
 	if err != nil {
 		var outputErr *output.Error
@@ -58,7 +89,7 @@ func Run(args []string, stdout io.Writer, stderr io.Writer, build version.BuildI
 		return ExitNoInput
 	}
 
-	now := time.Now()
+	now := nowFunc()
 	report := analyze.BuildReport(records, sources, analyze.ReportOptions{
 		GeneratedAt:     now,
 		MinFrequency:    result.Options.MinFrequency,

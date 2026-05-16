@@ -94,6 +94,96 @@ func TestParseFishPhysicalContinuation(t *testing.T) {
 	assertCommands(t, result.Commands, []string{"printf 'one\ntwo'"})
 }
 
+func TestParseFishBlockScalarLiteral(t *testing.T) {
+	history := strings.Join([]string{
+		"- cmd: |",
+		"    printf 'one: two'",
+		"    echo done",
+		"  when: 1717180000",
+		"- cmd: docker ps",
+		"  when: 1717180001",
+	}, "\n")
+
+	result, err := ParseFish(strings.NewReader(history), "/tmp/fish_history")
+	if err != nil {
+		t.Fatalf("ParseFish() error = %v", err)
+	}
+
+	assertFishSummary(t, result.Summary, 2, 2, 0)
+	assertCommands(t, result.Commands, []string{
+		"printf 'one: two'\necho done",
+		"docker ps",
+	})
+	assertTimestamp(t, result.Commands[0].Timestamp, 1717180000)
+	if result.Commands[0].EntryIndex != 1 {
+		t.Fatalf("first command EntryIndex = %d, want 1", result.Commands[0].EntryIndex)
+	}
+}
+
+func TestParseFishBlockScalarFoldedKeptMultilineForSafety(t *testing.T) {
+	history := strings.Join([]string{
+		"- cmd: >",
+		"    git status",
+		"    git branch --show-current",
+		"  when: 1717180000",
+	}, "\n")
+
+	result, err := ParseFish(strings.NewReader(history), "/tmp/fish_history")
+	if err != nil {
+		t.Fatalf("ParseFish() error = %v", err)
+	}
+
+	assertFishSummary(t, result.Summary, 1, 1, 0)
+	assertCommands(t, result.Commands, []string{"git status\ngit branch --show-current"})
+}
+
+func TestParseFishEmptyBlockScalarIsMalformedRecord(t *testing.T) {
+	const secret = "TOKEN=super-secret"
+	history := strings.Join([]string{
+		"- cmd: |",
+		"  when: 1717180000",
+		"- cmd: git status",
+		"  when: 1717180001",
+		"- cmd: " + secret,
+		"  when: not-a-timestamp",
+	}, "\n")
+
+	result, err := ParseFish(strings.NewReader(history), "/tmp/fish_history")
+	if err != nil {
+		t.Fatalf("ParseFish() error = %v", err)
+	}
+
+	assertFishSummary(t, result.Summary, 3, 1, 2)
+	assertCommands(t, result.Commands, []string{"git status"})
+	if len(result.Summary.Warnings) != 1 {
+		t.Fatalf("Warnings = %#v, want one malformed fish warning", result.Summary.Warnings)
+	}
+	if result.Summary.Warnings[0] != malformedFishRecordWarning {
+		t.Fatalf("Warnings[0] = %q, want %q", result.Summary.Warnings[0], malformedFishRecordWarning)
+	}
+	for _, warning := range result.Summary.Warnings {
+		if strings.Contains(warning, secret) || strings.Contains(warning, "not-a-timestamp") {
+			t.Fatalf("warning leaks raw malformed entry data: %q", warning)
+		}
+	}
+}
+
+func TestParseFishBlockScalarInvalidUTF8UsesSafeReplacementAndWarning(t *testing.T) {
+	result, err := ParseFish(strings.NewReader("- cmd: |\n    kubectl get \xff pods\n"), "/tmp/fish_history")
+	if err != nil {
+		t.Fatalf("ParseFish() error = %v", err)
+	}
+
+	assertFishSummary(t, result.Summary, 1, 1, 0)
+	assertCommands(t, result.Commands, []string{"kubectl get \uFFFD pods"})
+	if len(result.Summary.Warnings) != 1 {
+		t.Fatalf("Warnings = %#v, want one invalid UTF-8 warning", result.Summary.Warnings)
+	}
+	if result.Summary.Warnings[0] != invalidUTF8Warning {
+		t.Fatalf("Warnings[0] = %q, want %q", result.Summary.Warnings[0], invalidUTF8Warning)
+	}
+}
+
 func TestParseFishInvalidUTF8UsesSafeReplacementAndWarning(t *testing.T) {
 	result, err := ParseFish(strings.NewReader("- cmd: kubectl get \xff pods\n"), "/tmp/fish_history")
 	if err != nil {
