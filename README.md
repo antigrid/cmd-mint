@@ -154,6 +154,8 @@ The MVP intentionally does not include:
 
 Alias suggestions are exact-command aliases only. Frequent patterns may appear in `cheatsheet.md`, but parameterized aliases or shell functions are not generated in the MVP.
 
+The parser is intentionally lightweight. It preserves quoted strings where practical, but it does not evaluate shell syntax, globbing, environment expansion, command substitution, or aliases.
+
 ## Troubleshooting
 
 `cmd-mint` exits with these codes:

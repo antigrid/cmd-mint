@@ -69,6 +69,30 @@ func TestClassifyRawSensitivityDetectsRequiredPatterns(t *testing.T) {
 			flag:   model.SensitivitySecret,
 			reason: model.ExclusionSensitiveSecret,
 		},
+		{
+			name:   "refresh token assignment",
+			raw:    `curl -d refresh_token=fake-refresh-token https://example.invalid`,
+			flag:   model.SensitivitySecret,
+			reason: model.ExclusionSensitiveSecret,
+		},
+		{
+			name:   "vault secret read",
+			raw:    `vault kv get secret/app`,
+			flag:   model.SensitivitySecret,
+			reason: model.ExclusionSensitiveSecret,
+		},
+		{
+			name:   "service account credential file",
+			raw:    `cat service-account.json`,
+			flag:   model.SensitivityCredentialFile,
+			reason: model.ExclusionSensitiveCredentialFile,
+		},
+		{
+			name:   "gpg decrypt clipboard-like extraction",
+			raw:    `gpg --decrypt secrets.asc`,
+			flag:   model.SensitivityClipboardOrKeychain,
+			reason: model.ExclusionSensitiveClipboardOrKeychain,
+		},
 	}
 
 	for _, tt := range tests {

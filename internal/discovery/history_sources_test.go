@@ -146,6 +146,61 @@ func TestTildeHistoryFilePathIsExpanded(t *testing.T) {
 	}
 }
 
+func TestEnvironmentVariableHistoryFilePathIsExpanded(t *testing.T) {
+	home := tempHome(t)
+	explicit := writeHistory(t, home, "custom_zsh_history")
+	t.Setenv("CMD_MINT_HISTORY", explicit)
+
+	result, err := DiscoverHistorySources(Options{
+		HistoryFiles: []string{"$CMD_MINT_HISTORY"},
+		Shell:        model.ShellAuto,
+	})
+	if err != nil {
+		t.Fatalf("DiscoverHistorySources returned error: %v", err)
+	}
+
+	want := []model.HistorySource{
+		{SourceShell: model.ShellZsh, SourceFile: explicit},
+	}
+	if !reflect.DeepEqual(result.Sources, want) {
+		t.Fatalf("Sources = %#v, want %#v", result.Sources, want)
+	}
+}
+
+func TestDiscoveryUsesInjectedEnvironment(t *testing.T) {
+	home := t.TempDir()
+	explicit := writeHistory(t, home, "history")
+	env := Env{
+		Getenv: func(name string) string {
+			switch name {
+			case "HISTFILE":
+				return "$CMD_MINT_HISTORY"
+			case "CMD_MINT_HISTORY":
+				return explicit
+			case "SHELL":
+				return "/bin/fish"
+			default:
+				return ""
+			}
+		},
+		HomeDir: func() (string, error) {
+			return home, nil
+		},
+	}
+
+	result, err := DiscoverHistorySources(Options{Shell: model.ShellAuto, Env: env})
+	if err != nil {
+		t.Fatalf("DiscoverHistorySources returned error: %v", err)
+	}
+
+	want := []model.HistorySource{
+		{SourceShell: model.ShellFish, SourceFile: explicit},
+	}
+	if !reflect.DeepEqual(result.Sources, want) {
+		t.Fatalf("Sources = %#v, want %#v", result.Sources, want)
+	}
+}
+
 func tempHome(t *testing.T) string {
 	t.Helper()
 

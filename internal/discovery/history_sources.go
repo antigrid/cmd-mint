@@ -15,10 +15,37 @@ var ErrNoUsableSources = errors.New("no usable history sources")
 type Options struct {
 	HistoryFiles []string
 	Shell        model.Shell
+	Env          Env
 }
 
 type Result struct {
 	Sources []model.HistorySource
+}
+
+type Env struct {
+	Getenv  func(string) string
+	HomeDir func() (string, error)
+}
+
+func DefaultEnv() Env {
+	return Env{
+		Getenv:  os.Getenv,
+		HomeDir: os.UserHomeDir,
+	}
+}
+
+func (env Env) getenv(name string) string {
+	if env.Getenv == nil {
+		return os.Getenv(name)
+	}
+	return env.Getenv(name)
+}
+
+func (env Env) homeDir() (string, error) {
+	if env.HomeDir == nil {
+		return os.UserHomeDir()
+	}
+	return env.HomeDir()
 }
 
 type sourceKind int
@@ -35,7 +62,8 @@ type candidate struct {
 }
 
 func DiscoverHistorySources(opts Options) (Result, error) {
-	home, _ := os.UserHomeDir()
+	env := opts.Env
+	home, _ := env.homeDir()
 	var candidates []candidate
 
 	if home != "" {
@@ -46,19 +74,25 @@ func DiscoverHistorySources(opts Options) (Result, error) {
 		)
 	}
 
-	if histfile := strings.TrimSpace(os.Getenv("HISTFILE")); histfile != "" {
-		path := expandHome(histfile, home)
+	if histfile := strings.TrimSpace(env.getenv("HISTFILE")); histfile != "" {
+		path, err := ExpandPath(histfile, env)
+		if err != nil {
+			path = histfile
+		}
 		candidates = append(candidates, candidate{
 			path:  path,
-			shell: inferShell(path, opts.Shell, os.Getenv("SHELL"), sourceHistfile),
+			shell: inferShell(path, opts.Shell, env.getenv("SHELL"), sourceHistfile),
 		})
 	}
 
 	for _, explicit := range opts.HistoryFiles {
-		path := expandHome(explicit, home)
+		path, err := ExpandPath(explicit, env)
+		if err != nil {
+			path = explicit
+		}
 		candidates = append(candidates, candidate{
 			path:  path,
-			shell: inferShell(path, opts.Shell, os.Getenv("SHELL"), sourceExplicit),
+			shell: inferShell(path, opts.Shell, env.getenv("SHELL"), sourceExplicit),
 		})
 	}
 
@@ -116,6 +150,27 @@ func expandHome(path string, home string) string {
 		return filepath.Join(home, path[2:])
 	}
 	return path
+}
+
+func ExpandPath(path string, env Env) (string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", fmt.Errorf("path must not be empty")
+	}
+
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		home, err := env.homeDir()
+		if err != nil {
+			return "", err
+		}
+		path = expandHome(path, home)
+	}
+
+	path = os.Expand(path, env.getenv)
+	absPath, ok := absoluteCleanPath(path)
+	if !ok {
+		return "", fmt.Errorf("path must not be empty")
+	}
+	return absPath, nil
 }
 
 func absoluteCleanPath(path string) (string, bool) {
@@ -200,13 +255,14 @@ func inferCurrentShell(shellPath string) model.Shell {
 }
 
 func ValidateReadableHistoryFile(path string) error {
-	home, _ := os.UserHomeDir()
-	expanded := expandHome(path, home)
-	absPath, ok := absoluteCleanPath(expanded)
-	if !ok {
-		return fmt.Errorf("path must not be empty")
-	}
+	return ValidateReadableHistoryFileWithEnv(path, DefaultEnv())
+}
 
+func ValidateReadableHistoryFileWithEnv(path string, env Env) error {
+	absPath, err := ExpandPath(path, env)
+	if err != nil {
+		return err
+	}
 	info, err := os.Stat(absPath)
 	if err != nil {
 		return err

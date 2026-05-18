@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"cmd-mint/internal/discovery"
 	"cmd-mint/internal/model"
 	"cmd-mint/internal/output"
 	"cmd-mint/internal/version"
@@ -270,6 +271,31 @@ func TestValidationRejectsOutputDirExistingRegularFile(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "must not be an existing regular file") {
 		t.Fatalf("error = %q, want existing regular file validation", err.Error())
+	}
+}
+
+func TestParseFlagsWithEnvExpandsOutputDir(t *testing.T) {
+	home := t.TempDir()
+	env := discovery.Env{
+		Getenv: func(name string) string {
+			if name == "CMD_MINT_REPORT_ROOT" {
+				return home
+			}
+			return ""
+		},
+		HomeDir: func() (string, error) {
+			return home, nil
+		},
+	}
+
+	result, err := parseFlagsWithEnv([]string{"--output-dir", "$CMD_MINT_REPORT_ROOT/report"}, &bytes.Buffer{}, env)
+	if err != nil {
+		t.Fatalf("parseFlagsWithEnv returned error: %v", err)
+	}
+
+	want := filepath.Join(home, "report")
+	if result.Options.OutputDir != want {
+		t.Fatalf("OutputDir = %q, want %q", result.Options.OutputDir, want)
 	}
 }
 

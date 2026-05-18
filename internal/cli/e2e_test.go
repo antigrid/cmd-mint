@@ -222,8 +222,8 @@ func TestEndToEndFlagMatrix(t *testing.T) {
 		if got := countAliasLines(aliases); got != 0 {
 			t.Fatalf("alias line count = %d, want 0:\n%s", got, aliases)
 		}
-		if !strings.Contains(aliases, "# No safe alias suggestions were found.") {
-			t.Fatalf("alias file missing no-suggestions comment:\n%s", aliases)
+		if strings.Contains(aliases, "# No safe alias suggestions were found.") {
+			t.Fatalf("alias file should be header-only when max aliases is zero:\n%s", aliases)
 		}
 	})
 

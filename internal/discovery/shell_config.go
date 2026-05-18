@@ -22,7 +22,11 @@ type shellConfigCandidate struct {
 }
 
 func DiscoverShellConfigAliases() ShellConfigResult {
-	home, _ := os.UserHomeDir()
+	return DiscoverShellConfigAliasesWithEnv(DefaultEnv())
+}
+
+func DiscoverShellConfigAliasesWithEnv(env Env) ShellConfigResult {
+	home, _ := env.homeDir()
 	result := ShellConfigResult{
 		Aliases: make(map[string]model.ExistingAliasDefinition),
 	}

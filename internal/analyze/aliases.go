@@ -141,6 +141,10 @@ func buildAliasCandidate(command CommandAggregate, minFrequency int, existing ma
 		countAliasExclusion(exclusions, model.ExclusionTooShort, &exclusions.TooShortCommandCount)
 		return aliasCandidate{}, false
 	}
+	if !validAliasName(aliasName) {
+		countAliasExclusion(exclusions, model.ExclusionTooShort, &exclusions.TooShortCommandCount)
+		return aliasCandidate{}, false
+	}
 
 	if convention && aliasConflicts(aliasName, existing, generated) {
 		countAliasConflict(aliasName, exclusions)
@@ -398,6 +402,24 @@ func trimAliasName(name string) string {
 		return ""
 	}
 	return truncateString(name, maxFallbackAliasLen)
+}
+
+func validAliasName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r == '_':
+		case i > 0 && r >= '0' && r <= '9':
+		case i > 0 && r == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func truncateString(value string, limit int) string {

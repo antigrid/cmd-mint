@@ -29,6 +29,7 @@ type Runner struct {
 	Stderr io.Writer
 	Now    func() time.Time
 	Build  version.BuildInfo
+	Env    discovery.Env
 }
 
 func (r Runner) Run(args []string) int {
@@ -44,11 +45,11 @@ func (r Runner) Run(args []string) int {
 	if now == nil {
 		now = time.Now
 	}
-	return run(args, stdout, stderr, r.Build, now)
+	return run(args, stdout, stderr, r.Build, now, r.Env)
 }
 
-func run(args []string, stdout io.Writer, stderr io.Writer, build version.BuildInfo, nowFunc func() time.Time) int {
-	result, err := parseFlags(args, stderr)
+func run(args []string, stdout io.Writer, stderr io.Writer, build version.BuildInfo, nowFunc func() time.Time, env discovery.Env) int {
+	result, err := parseFlagsWithEnv(args, stderr, env)
 	if err != nil {
 		var outputErr *output.Error
 		if errors.As(err, &outputErr) {
@@ -72,6 +73,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer, build version.BuildI
 	discovered, err := discovery.DiscoverHistorySources(discovery.Options{
 		HistoryFiles: result.Options.HistoryFiles,
 		Shell:        result.Options.Shell,
+		Env:          env,
 	})
 	if err != nil {
 		if errors.Is(err, discovery.ErrNoUsableSources) {
@@ -82,7 +84,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer, build version.BuildI
 		return ExitInternalError
 	}
 
-	shellConfig := discovery.DiscoverShellConfigAliases()
+	shellConfig := discovery.DiscoverShellConfigAliasesWithEnv(env)
 	records, sources, parseWarnings := parseHistorySources(discovered.Sources)
 	if !hasParsedSource(sources) {
 		fmt.Fprint(stderr, discovery.NoSourcesMessage())

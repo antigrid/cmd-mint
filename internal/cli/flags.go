@@ -48,6 +48,10 @@ func (f *repeatedStringFlag) Set(value string) error {
 }
 
 func parseFlags(args []string, stderr io.Writer) (parseResult, error) {
+	return parseFlagsWithEnv(args, stderr, discovery.DefaultEnv())
+}
+
+func parseFlagsWithEnv(args []string, stderr io.Writer, env discovery.Env) (parseResult, error) {
 	opts := Options{
 		Shell:        model.ShellAuto,
 		MaxAliases:   defaultMaxAliases,
@@ -89,14 +93,25 @@ func parseFlags(args []string, stderr io.Writer) (parseResult, error) {
 		return parseResult{Options: opts, Help: true}, nil
 	}
 
-	if err := validateOptions(opts); err != nil {
+	if err := validateOptionsWithEnv(opts, env); err != nil {
 		return parseResult{}, err
+	}
+	if opts.OutputDir != "" {
+		expanded, err := discovery.ExpandPath(opts.OutputDir, env)
+		if err != nil {
+			return parseResult{}, err
+		}
+		opts.OutputDir = expanded
 	}
 
 	return parseResult{Options: opts}, nil
 }
 
 func validateOptions(opts Options) error {
+	return validateOptionsWithEnv(opts, discovery.DefaultEnv())
+}
+
+func validateOptionsWithEnv(opts Options, env discovery.Env) error {
 	switch opts.Shell {
 	case model.ShellAuto, model.ShellBash, model.ShellZsh, model.ShellFish:
 	default:
@@ -112,13 +127,13 @@ func validateOptions(opts Options) error {
 	}
 
 	for _, path := range opts.HistoryFiles {
-		if err := discovery.ValidateReadableHistoryFile(path); err != nil {
+		if err := discovery.ValidateReadableHistoryFileWithEnv(path, env); err != nil {
 			return fmt.Errorf("--history-file %q: %w", path, err)
 		}
 	}
 
 	if opts.OutputDir != "" {
-		if err := validateOutputDirPath(opts.OutputDir); err != nil {
+		if err := validateOutputDirPathWithEnv(opts.OutputDir, env); err != nil {
 			return err
 		}
 	}
@@ -127,15 +142,23 @@ func validateOptions(opts Options) error {
 }
 
 func validateOutputDirPath(path string) error {
-	info, err := os.Stat(path)
+	return validateOutputDirPathWithEnv(path, discovery.DefaultEnv())
+}
+
+func validateOutputDirPathWithEnv(path string, env discovery.Env) error {
+	expanded, err := discovery.ExpandPath(path, env)
+	if err != nil {
+		return outputPathError(path, err)
+	}
+	info, err := os.Stat(expanded)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return outputPathError(path, err)
+		return outputPathError(expanded, err)
 	}
 	if info.Mode().IsRegular() {
-		return outputPathError(path, fmt.Errorf("must not be an existing regular file"))
+		return outputPathError(expanded, fmt.Errorf("must not be an existing regular file"))
 	}
 	return nil
 }

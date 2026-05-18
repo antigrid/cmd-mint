@@ -106,6 +106,11 @@ func (builder *AggregateBuilder) AddRecord(record model.CommandRecord) {
 		builder.countUnparsedRecord(record)
 		return
 	}
+	if HasSuspiciousControl(record.RawCommand) {
+		builder.exclusions.MalformedCommandCount++
+		builder.countReason(model.ExclusionMalformedEntry)
+		return
+	}
 
 	if shouldAnalyzeRecord(record) {
 		record = AnalyzeRecord(record)

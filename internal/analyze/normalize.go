@@ -115,6 +115,18 @@ func NormalizeCommand(raw string) NormalizedCommand {
 	}
 }
 
+func HasSuspiciousControl(command string) bool {
+	for _, r := range command {
+		if r == '\n' || r == '\r' || r == '\t' {
+			continue
+		}
+		if r < 0x20 || r == 0x7f {
+			return true
+		}
+	}
+	return false
+}
+
 func appendSensitivityFlags(existing []model.SensitivityFlag, additions ...model.SensitivityFlag) []model.SensitivityFlag {
 	for _, addition := range additions {
 		seen := false

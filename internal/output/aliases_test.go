@@ -52,7 +52,7 @@ func TestRenderAliasesFishIncludesRequiredHeaderAndFishQuote(t *testing.T) {
 	}
 }
 
-func TestRenderAliasesMaxAliasesZeroWritesNoSuggestionsComment(t *testing.T) {
+func TestRenderAliasesMaxAliasesZeroWritesOnlyHeader(t *testing.T) {
 	output := string(RenderAliasesSH([]model.AliasSuggestion{
 		{
 			Name:              "gs",
@@ -66,8 +66,8 @@ func TestRenderAliasesMaxAliasesZeroWritesNoSuggestionsComment(t *testing.T) {
 	if strings.Contains(output, "alias gs=") {
 		t.Fatalf("alias output contains alias when max aliases is zero:\n%s", output)
 	}
-	if !strings.Contains(output, "# No safe alias suggestions were found.") {
-		t.Fatalf("alias output missing no-suggestions comment:\n%s", output)
+	if strings.Contains(output, "# No safe alias suggestions were found.") {
+		t.Fatalf("alias output should be header-only when max aliases is zero:\n%s", output)
 	}
 }
 

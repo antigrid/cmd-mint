@@ -79,6 +79,19 @@ func TestGenerateAliasSuggestionsSkipsCommonSystemCommandConflict(t *testing.T) 
 	}
 }
 
+func TestGenerateAliasSuggestionsSkipsInvalidAliasName(t *testing.T) {
+	command := directAggregate("123tool command", 5)
+
+	aliases := GenerateAliasSuggestionsFromCommands([]CommandAggregate{command}, AliasOptions{MinFrequency: 3, MaxAliases: 25})
+
+	if len(aliases.Suggestions) != 0 {
+		t.Fatalf("suggestions = %#v, want none for invalid alias name", aliases.Suggestions)
+	}
+	if got := aliases.Exclusions.ByReason[model.ExclusionTooShort]; got != 1 {
+		t.Fatalf("invalid alias exclusion count = %d, want 1", got)
+	}
+}
+
 func TestGenerateAliasSuggestionsAppliesThresholdsAndConventionExceptions(t *testing.T) {
 	commands := []CommandAggregate{
 		directAggregate("git add", 3),

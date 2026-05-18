@@ -28,6 +28,9 @@ func renderAliasSnippet(suggestions []model.AliasSuggestion, maxAliases int, hea
 
 	var buffer bytes.Buffer
 	fmt.Fprintln(&buffer, header)
+	if maxAliases == 0 {
+		return buffer.Bytes()
+	}
 
 	written := 0
 	for _, suggestion := range aliasFileSuggestions(suggestions, maxAliases) {

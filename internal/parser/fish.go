@@ -113,7 +113,20 @@ func parseFishCommandLine(line string) (string, bool) {
 	if !strings.HasPrefix(trimmed, prefix) {
 		return "", false
 	}
-	return strings.TrimSpace(trimmed[len(prefix):]), true
+	return parseFishCommandValue(strings.TrimSpace(trimmed[len(prefix):])), true
+}
+
+func parseFishCommandValue(value string) string {
+	if len(value) >= 2 && strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`) {
+		if unquoted, err := strconv.Unquote(value); err == nil {
+			return unquoted
+		}
+		return strings.Trim(value, `"`)
+	}
+	if len(value) >= 2 && strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'") {
+		return strings.Trim(value, "'")
+	}
+	return value
 }
 
 func parseFishBlockStyle(command string) (fishBlockStyle, bool) {

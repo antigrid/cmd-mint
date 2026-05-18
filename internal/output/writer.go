@@ -45,7 +45,7 @@ func WriteArtifact(dir string, name string, data []byte) error {
 		}
 	}()
 
-	if err := tempFile.Chmod(filePerm); err != nil {
+	if err := tempFile.Chmod(filePerm); err != nil && !permissionChangeUnsupported(err) {
 		_ = tempFile.Close()
 		return wrapError("set temporary artifact permissions", tempPath, err)
 	}

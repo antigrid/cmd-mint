@@ -17,16 +17,16 @@ func (classification SensitivityClassification) Sensitive() bool {
 }
 
 var (
-	secretAssignmentRE = regexp.MustCompile(`(?i)(^|[^a-z0-9_])(?:password|passwd|token|api[_-]?key|apikey|secret|client[_-]?secret|aws_secret_access_key|npm_token|node_auth_token|_authtoken)\s*[:=]`)
+	secretAssignmentRE = regexp.MustCompile(`(?i)(^|[^a-z0-9_])(?:password|passwd|token|api[_-]?key|apikey|secret|client[_-]?secret|access[_-]?key|refresh[_-]?token|aws_secret_access_key|npm_token|node_auth_token|_authtoken)\s*[:=]`)
 	secretNameRE       = regexp.MustCompile(`(?i)\b(?:AWS_SECRET_ACCESS_KEY|NPM_TOKEN|NODE_AUTH_TOKEN|_authToken)\b`)
 	authHeaderRE       = regexp.MustCompile(`(?i)\bauthorization\s*:\s*(?:bearer|basic|token)\b`)
 	cookieHeaderRE     = regexp.MustCompile(`(?i)(\bcookie\s*:|--cookie(?:=|\s+))`)
-	privateKeyRE       = regexp.MustCompile(`(?i)(-----BEGIN [A-Z ]*PRIVATE KEY-----|\bPRIVATE KEY\b|\bid_(?:rsa|dsa|ecdsa|ed25519)\b|\.(?:pem|p12|pfx)\b)`)
-	credentialFileRE   = regexp.MustCompile(`(?i)(^|[/\s'"=])(?:\.env(?:[.\w-]*)?|kubeconfig|\.kube/config|credentials(?:\.(?:json|ya?ml|ini|txt))?|\.aws/credentials|\.npmrc|\.netrc|docker/config\.json)\b`)
+	privateKeyRE       = regexp.MustCompile(`(?i)(-----BEGIN [A-Z ]*PRIVATE KEY-----|\bPRIVATE KEY\b|\bid_(?:rsa|dsa|ecdsa|ed25519)\b|\bssh_host_[a-z0-9_]*_key\b|\.(?:pem|p12|pfx)\b)`)
+	credentialFileRE   = regexp.MustCompile(`(?i)(^|[/\s'"=])(?:\.env(?:[.\w-]*)?|kubeconfig|\.kube/config|credentials(?:\.(?:json|ya?ml|ini|txt))?|secrets\.json|service[-_]account|\.aws/credentials|\.npmrc|\.netrc|docker/config\.json)\b`)
 	databaseURLRE      = regexp.MustCompile(`(?i)\b(?:postgres(?:ql)?|mysql|mariadb|redis|mongodb(?:\+srv)?|sqlserver)://[^\s'"<>/@:]+:[^\s'"<>/@]+@`)
 	privateURLRE       = regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://[^\s'"<>/@:]+:[^\s'"<>/@]+@`)
-	clipboardRE        = regexp.MustCompile(`(?i)(\b(?:pbpaste|xclip|xsel)\b|\bsecurity\s+find-(?:generic|internet)-password\b|\bsecret-tool\s+lookup\b|\bpass\s+(?:show|grep)\b)`)
-	cloudSecretRE      = regexp.MustCompile(`(?i)\b(?:aws\s+secretsmanager\s+get-secret-value|gcloud\s+secrets\s+versions\s+access|az\s+keyvault\s+secret\s+show|op\s+(?:read|item\s+get))\b`)
+	clipboardRE        = regexp.MustCompile(`(?i)(\b(?:pbpaste|xclip|xsel|wl-paste)\b|\bsecurity\s+find-(?:generic|internet)-password\b|\bsecret-tool\s+lookup\b|\bpass\s+(?:show|grep)\b|\bgpg\s+--decrypt\b)`)
+	cloudSecretRE      = regexp.MustCompile(`(?i)\b(?:aws\s+secretsmanager\s+get-secret-value|gcloud\s+secrets\s+versions\s+access|az\s+keyvault\s+secret\s+show|vault\s+(?:kv\s+get|read)|op\s+(?:read|item\s+get))\b`)
 	packageSecretRE    = regexp.MustCompile(`(?i)(\bnpm\s+token\b|\bnpm\s+publish\b.*--//registry|_authToken|NODE_AUTH_TOKEN|NPM_TOKEN|\btwine\s+upload\b.*(?:-p|--password))`)
 )
 
@@ -99,9 +99,16 @@ func tokenLooksSecret(token string) bool {
 		"apikey",
 		"secret",
 		"client_secret",
+		"access_key",
+		"refresh_token",
 	} {
 		if strings.HasPrefix(token, key+"=") || strings.HasPrefix(token, key+":") ||
 			strings.Contains(token, "_"+key+"=") || strings.Contains(token, "-"+key+"=") {
+			return true
+		}
+	}
+	for _, flag := range []string{"--password", "--token", "--secret", "--api-key", "--apikey"} {
+		if strings.HasPrefix(token, flag) {
 			return true
 		}
 	}
@@ -134,6 +141,9 @@ func tokenLooksCredentialFile(token string) bool {
 		strings.HasPrefix(base, ".env.") ||
 		base == "kubeconfig" ||
 		base == "credentials" ||
+		base == "secrets.json" ||
+		base == "service-account" ||
+		base == "service_account" ||
 		base == ".npmrc" ||
 		base == ".netrc" ||
 		strings.HasSuffix(token, "/.kube/config") ||
@@ -150,6 +160,7 @@ func tokenLooksPrivateKey(token string) bool {
 		base == "id_dsa" ||
 		base == "id_ecdsa" ||
 		base == "id_ed25519" ||
+		strings.HasPrefix(base, "ssh_host_") ||
 		strings.HasSuffix(base, ".pem") ||
 		strings.HasSuffix(base, ".p12") ||
 		strings.HasSuffix(base, ".pfx")

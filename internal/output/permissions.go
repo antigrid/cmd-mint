@@ -1,8 +1,10 @@
 package output
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"syscall"
 )
 
 const (
@@ -35,9 +37,24 @@ func wrapError(op string, path string, err error) error {
 }
 
 func chmodDir(path string) error {
-	return wrapError("set output directory permissions", path, os.Chmod(path, dirPerm))
+	return chmodBestEffort("set output directory permissions", path, dirPerm)
 }
 
 func chmodFile(path string) error {
-	return wrapError("set artifact permissions", path, os.Chmod(path, filePerm))
+	return chmodBestEffort("set artifact permissions", path, filePerm)
+}
+
+func chmodBestEffort(op string, path string, perm os.FileMode) error {
+	err := os.Chmod(path, perm)
+	if err == nil || permissionChangeUnsupported(err) {
+		return nil
+	}
+	return wrapError(op, path, err)
+}
+
+func permissionChangeUnsupported(err error) bool {
+	return errors.Is(err, syscall.ENOTSUP) ||
+		errors.Is(err, syscall.EOPNOTSUPP) ||
+		errors.Is(err, syscall.ENOSYS) ||
+		errors.Is(err, syscall.EPERM)
 }

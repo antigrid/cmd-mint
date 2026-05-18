@@ -82,6 +82,21 @@ func TestParseFishEscapedNewline(t *testing.T) {
 	assertCommands(t, result.Commands, []string{"printf 'one\ntwo'"})
 }
 
+func TestParseFishQuotedCommandValues(t *testing.T) {
+	const history = "- cmd: \"echo hi\\nagain\"\n  when: 1717180000\n- cmd: 'git status'\n"
+
+	result, err := ParseFish(strings.NewReader(history), "/tmp/fish_history")
+	if err != nil {
+		t.Fatalf("ParseFish() error = %v", err)
+	}
+
+	assertFishSummary(t, result.Summary, 2, 2, 0)
+	assertCommands(t, result.Commands, []string{
+		"echo hi\nagain",
+		"git status",
+	})
+}
+
 func TestParseFishPhysicalContinuation(t *testing.T) {
 	const history = "- cmd: printf 'one\n  two'\n  when: 1717180000\n"
 

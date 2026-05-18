@@ -89,6 +89,26 @@ func TestAggregateRecordsKeepsRiskyNonSensitiveCommandsAndCountsAliasExclusions(
 	}
 }
 
+func TestAggregateRecordsTreatsSuspiciousControlCharactersAsMalformed(t *testing.T) {
+	result := AggregateRecords([]model.CommandRecord{
+		rawRecord(model.ShellBash, "/home/alex/.bash_history", "git status\x00 --short"),
+		rawRecord(model.ShellBash, "/home/alex/.bash_history", "git status"),
+	}, nil, AggregateOptions{})
+
+	if _, ok := result.CommandAggregates["git status\x00 --short"]; ok {
+		t.Fatal("control-character command entered safe aggregates")
+	}
+	if result.Summary.SafeCommandsAnalyzed != 1 {
+		t.Fatalf("SafeCommandsAnalyzed = %d, want 1", result.Summary.SafeCommandsAnalyzed)
+	}
+	if result.Exclusions.MalformedCommandCount != 1 {
+		t.Fatalf("MalformedCommandCount = %d, want 1", result.Exclusions.MalformedCommandCount)
+	}
+	if got := result.Exclusions.ByReason[model.ExclusionMalformedEntry]; got != 1 {
+		t.Fatalf("malformed count = %d, want 1", got)
+	}
+}
+
 func TestAggregateRecordsTracksSourceWarningsMalformedAndLowFrequencyCounts(t *testing.T) {
 	source := model.SourceSummary{
 		SourceShell:    model.ShellZsh,
