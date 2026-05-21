@@ -49,12 +49,14 @@ type ToolSection struct {
 }
 
 type SafeCommandSummary struct {
-	Command           string  `json:"command"`
-	NormalizedCommand string  `json:"normalized_command,omitempty"`
-	Count             int     `json:"count"`
-	Tool              string  `json:"tool,omitempty"`
-	Subcommand        string  `json:"subcommand,omitempty"`
-	SourceShells      []Shell `json:"source_shells,omitempty"`
+	Command           string            `json:"command"`
+	NormalizedCommand string            `json:"normalized_command,omitempty"`
+	Count             int               `json:"count"`
+	Tool              string            `json:"tool,omitempty"`
+	Subcommand        string            `json:"subcommand,omitempty"`
+	SourceShells      []Shell           `json:"source_shells,omitempty"`
+	RiskFlags         []RiskFlag        `json:"risk_flags,omitempty"`
+	ExclusionReasons  []ExclusionReason `json:"exclusion_reasons,omitempty"`
 }
 
 func SafeCommandFromRecord(record CommandRecord, count int, sourceShells []Shell) (SafeCommandSummary, bool) {
@@ -72,6 +74,8 @@ func SafeCommandFromRecord(record CommandRecord, count int, sourceShells []Shell
 		Tool:              record.Tool,
 		Subcommand:        record.Subcommand,
 		SourceShells:      append([]Shell(nil), sourceShells...),
+		RiskFlags:         append([]RiskFlag(nil), record.RiskFlags...),
+		ExclusionReasons:  append([]ExclusionReason(nil), record.ExclusionReasons...),
 	}, true
 }
 

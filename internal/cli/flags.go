@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"cmd-mint/internal/discovery"
 	"cmd-mint/internal/model"
@@ -29,6 +30,7 @@ type Options struct {
 	Verbose      bool
 	ShowVersion  bool
 	ShowHelp     bool
+	GeneratedAt  *time.Time
 }
 
 type parseResult struct {
@@ -76,6 +78,7 @@ func parseFlagsWithEnv(args []string, stderr io.Writer, env discovery.Env) (pars
 	fs.BoolVar(&opts.ShowVersion, "version", false, "print version information and exit")
 	fs.BoolVar(&opts.ShowHelp, "help", false, "print help and exit")
 	fs.BoolVar(&opts.ShowHelp, "h", false, "print help and exit")
+	generatedAt := fs.String("generated-at", "", "RFC3339 timestamp to use in generated reports")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -89,6 +92,13 @@ func parseFlagsWithEnv(args []string, stderr io.Writer, env discovery.Env) (pars
 
 	opts.HistoryFiles = append([]string(nil), historyFiles...)
 	opts.Shell = model.Shell(*shell)
+	if strings.TrimSpace(*generatedAt) != "" {
+		parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(*generatedAt))
+		if err != nil {
+			return parseResult{}, fmt.Errorf("--generated-at must be an RFC3339 timestamp")
+		}
+		opts.GeneratedAt = &parsed
+	}
 	if opts.ShowHelp {
 		return parseResult{Options: opts, Help: true}, nil
 	}

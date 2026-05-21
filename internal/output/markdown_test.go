@@ -143,6 +143,7 @@ func TestRenderCheatsheetMarkdownIncludesPatternsAndExclusions(t *testing.T) {
 		"Patterns are shown for review only and are not emitted as aliases in the MVP.",
 		"`git checkout <branch>`: seen 3x",
 		"`git checkout feature/ticket-16`",
+		"`kubectl delete pod old-worker -n staging`: seen 1x; representative normalized command: `kubectl delete pod old-worker -n staging`; source shells: zsh; label: risky observed command, excluded from alias suggestions",
 		"- Existing alias conflicts skipped: 1",
 		"- Existing alias conflict names: `ll`",
 		"- Multiline command count: 1",
@@ -234,6 +235,23 @@ func sampleReport() model.Report {
 				{Command: "docker ps", NormalizedCommand: "docker ps", Count: 6, Tool: "docker", Subcommand: "ps"},
 			},
 			Subcommands: []model.SubcommandSummary{{Subcommand: "ps", Count: 6}},
+		},
+		{
+			Tool:  "kubectl",
+			Count: 1,
+			Commands: []model.SafeCommandSummary{
+				{
+					Command:           "kubectl delete pod old-worker -n staging",
+					NormalizedCommand: "kubectl delete pod old-worker -n staging",
+					Count:             1,
+					Tool:              "kubectl",
+					Subcommand:        "delete",
+					SourceShells:      []model.Shell{model.ShellZsh},
+					RiskFlags:         []model.RiskFlag{model.RiskDestructive},
+					ExclusionReasons:  []model.ExclusionReason{model.ExclusionRiskyDestructive},
+				},
+			},
+			Subcommands: []model.SubcommandSummary{{Subcommand: "delete", Count: 1}},
 		},
 	}
 	report.Patterns = []model.PatternSummary{

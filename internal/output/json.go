@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"cmd-mint/internal/analyze"
 	"cmd-mint/internal/model"
 )
 
@@ -77,6 +78,8 @@ func safeCommandsForJSON(commands []model.SafeCommandSummary) []model.SafeComman
 			continue
 		}
 		command.SourceShells = append([]model.Shell(nil), command.SourceShells...)
+		command.RiskFlags = append([]model.RiskFlag(nil), command.RiskFlags...)
+		command.ExclusionReasons = append([]model.ExclusionReason(nil), command.ExclusionReasons...)
 		safe = append(safe, command)
 	}
 	return safe
@@ -131,6 +134,14 @@ func containsSensitiveOutputText(value string) bool {
 	lower := strings.ToLower(value)
 	if lower == "" {
 		return false
+	}
+
+	if analyze.ClassifyRawSensitivity(value).Sensitive() {
+		return true
+	}
+	analysis := analyze.AnalyzeCommand(value)
+	if analyze.ClassifyNormalizedSensitivity(analysis.NormalizedCommand, analysis.Tokens).Sensitive() {
+		return true
 	}
 
 	sensitiveMarkers := []string{

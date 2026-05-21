@@ -34,6 +34,18 @@ func TestClassifyRawSensitivityDetectsRequiredPatterns(t *testing.T) {
 			reason: model.ExclusionSensitiveSecret,
 		},
 		{
+			name:   "separated secret name and value",
+			raw:    `heroku config:set STRIPE_SECRET sk_live_123456789`,
+			flag:   model.SensitivitySecret,
+			reason: model.ExclusionSensitiveSecret,
+		},
+		{
+			name:   "separated api key name and value",
+			raw:    `fly secrets set OPENAI_API_KEY sk-project-123456789`,
+			flag:   model.SensitivitySecret,
+			reason: model.ExclusionSensitiveSecret,
+		},
+		{
 			name:   "authorization bearer header",
 			raw:    `curl -H "Authorization: Bearer fake-bearer-token" https://example.invalid`,
 			flag:   model.SensitivityAuthHeader,
@@ -164,6 +176,17 @@ func TestAnalyzeRecordKeepsSafeDisplayCommand(t *testing.T) {
 	}
 	if got.DisplayCommand != "git status" {
 		t.Fatalf("DisplayCommand = %q, want git status", got.DisplayCommand)
+	}
+}
+
+func TestClassifyRawSensitivityDoesNotTreatOrdinaryTokenWordsAsSecrets(t *testing.T) {
+	for _, raw := range []string{
+		"go test ./internal/analyze/tokenize",
+		"vim tokenization-notes.md",
+	} {
+		if got := ClassifyRawSensitivity(raw); got.Sensitive() {
+			t.Fatalf("ClassifyRawSensitivity(%q).Sensitive() = true, want false: %#v", raw, got)
+		}
 	}
 }
 

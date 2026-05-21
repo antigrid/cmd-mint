@@ -109,6 +109,26 @@ func TestCreateRequestedDirectoryDoesNotDeleteUnknownFiles(t *testing.T) {
 	}
 }
 
+func TestCreateRequestedDirectoryPreservesExistingDirectoryPermissions(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "report")
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatalf("Mkdir(report) error = %v", err)
+	}
+	if err := os.Chmod(path, 0o755); err != nil {
+		t.Fatalf("Chmod(report) error = %v", err)
+	}
+
+	got, err := CreateReportDirectory("", path, time.Now())
+	if err != nil {
+		t.Fatalf("CreateReportDirectory() error = %v", err)
+	}
+	if got != path {
+		t.Fatalf("CreateReportDirectory() = %q, want %q", got, path)
+	}
+	assertDirMode(t, path, 0o755)
+}
+
 func assertDirMode(t *testing.T, path string, want os.FileMode) {
 	t.Helper()
 

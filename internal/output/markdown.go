@@ -38,7 +38,7 @@ func renderSummary(buffer *bytes.Buffer, report model.Report) {
 	fmt.Fprintln(buffer, "## Summary")
 	fmt.Fprintln(buffer)
 	fmt.Fprintf(buffer, "- Total sources scanned: %d\n", report.Summary.TotalSourcesScanned)
-	fmt.Fprintf(buffer, "- Safe commands analyzed: %d\n", report.Summary.SafeCommandsAnalyzed)
+	fmt.Fprintf(buffer, "- Non-sensitive commands analyzed: %d\n", report.Summary.SafeCommandsAnalyzed)
 	fmt.Fprintf(buffer, "- Sensitive-looking commands skipped: %d\n", report.Summary.SensitiveCommandsSkipped)
 	fmt.Fprintf(buffer, "- Risky commands excluded from alias suggestions: %d\n", report.Summary.RiskyCommandsExcluded)
 	fmt.Fprintf(buffer, "- Alias conflicts skipped: %d\n", report.Summary.AliasConflictsSkipped)
@@ -123,7 +123,7 @@ func renderTools(buffer *bytes.Buffer, report model.Report) {
 
 	sections := sortedToolSections(report.ToolSections, report.AliasSuggestions)
 	if len(sections) == 0 {
-		fmt.Fprintln(buffer, "No frequent safe commands were recorded by tool.")
+		fmt.Fprintln(buffer, "No frequent observed non-sensitive commands were recorded by tool.")
 		fmt.Fprintln(buffer)
 		return
 	}
@@ -135,13 +135,13 @@ func renderTools(buffer *bytes.Buffer, report model.Report) {
 		}
 		fmt.Fprintf(buffer, "### %s\n", tool)
 		fmt.Fprintln(buffer)
-		fmt.Fprintf(buffer, "- Safe commands analyzed for tool: %d\n", section.Count)
+		fmt.Fprintf(buffer, "- Observed non-sensitive commands for tool: %d\n", section.Count)
 
 		commands := sortedCommands(section.Commands)
 		if len(commands) == 0 {
-			fmt.Fprintln(buffer, "- Frequent safe exact commands: none recorded")
+			fmt.Fprintln(buffer, "- Frequent observed exact commands: none recorded")
 		} else {
-			fmt.Fprintln(buffer, "- Frequent safe exact commands:")
+			fmt.Fprintln(buffer, "- Frequent observed exact commands:")
 			for _, command := range commands {
 				normalized := command.NormalizedCommand
 				if normalized == "" {
@@ -150,6 +150,9 @@ func renderTools(buffer *bytes.Buffer, report model.Report) {
 				fmt.Fprintf(buffer, "  - %s: seen %dx; representative normalized command: %s", codeSpan(command.Command), command.Count, codeSpan(normalized))
 				if len(command.SourceShells) > 0 {
 					fmt.Fprintf(buffer, "; source shells: %s", shellList(command.SourceShells))
+				}
+				if commandSummaryIsRisky(command) {
+					fmt.Fprint(buffer, "; label: risky observed command, excluded from alias suggestions")
 				}
 				fmt.Fprintln(buffer)
 			}
@@ -251,6 +254,18 @@ func renderPrivacy(buffer *bytes.Buffer, report model.Report) {
 			fmt.Fprintf(buffer, "  - %s: %d\n", codeSpan(string(count.key)), count.count)
 		}
 	}
+}
+
+func commandSummaryIsRisky(command model.SafeCommandSummary) bool {
+	if len(command.RiskFlags) > 0 {
+		return true
+	}
+	for _, reason := range command.ExclusionReasons {
+		if reason == model.ExclusionRiskyDestructive || reason == model.ExclusionRiskyProductionAction {
+			return true
+		}
+	}
+	return false
 }
 
 func sortedSources(sources []model.SourceSummary) []model.SourceSummary {

@@ -50,9 +50,6 @@ func createRequestedDirectory(path string) (string, error) {
 		if !info.IsDir() {
 			return "", wrapError("create output directory", path, fmt.Errorf("must be a directory"))
 		}
-		if err := chmodDir(path); err != nil {
-			return "", err
-		}
 		return path, nil
 	}
 	if !errors.Is(err, os.ErrNotExist) {

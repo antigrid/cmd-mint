@@ -177,6 +177,48 @@ func TestRunnerUsesInjectedClockForDefaultOutput(t *testing.T) {
 	}
 }
 
+func TestRunUsesGeneratedAtFlagForDeterministicReportTimestamp(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HISTFILE", "")
+	t.Setenv("SHELL", "")
+
+	dir := t.TempDir()
+	history := writeTempHistoryFile(t, dir, "bash.history")
+	outputDir := filepath.Join(dir, "report")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Runner{
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Now:    func() time.Time { return time.Date(2030, 1, 1, 1, 2, 3, 0, time.UTC) },
+	}.Run([]string{
+		"--history-file", history,
+		"--shell", "bash",
+		"--output-dir", outputDir,
+		"--generated-at", "2026-06-01T14:30:22Z",
+		"--json",
+	})
+
+	if code != ExitOK {
+		t.Fatalf("Runner.Run(--generated-at) exit code = %d, want %d\nstderr:\n%s", code, ExitOK, stderr.String())
+	}
+	markdown, err := os.ReadFile(filepath.Join(outputDir, output.ArtifactCheatsheet))
+	if err != nil {
+		t.Fatalf("ReadFile(cheatsheet) error = %v", err)
+	}
+	if !strings.Contains(string(markdown), "Generated locally by cmd-mint on 2026-06-01 14:30:22.") {
+		t.Fatalf("cheatsheet does not use --generated-at timestamp:\n%s", markdown)
+	}
+	jsonData, err := os.ReadFile(filepath.Join(outputDir, output.ArtifactReportJSON))
+	if err != nil {
+		t.Fatalf("ReadFile(report.json) error = %v", err)
+	}
+	if !strings.Contains(string(jsonData), `"generated_at": "2026-06-01T14:30:22Z"`) {
+		t.Fatalf("report.json does not use --generated-at timestamp:\n%s", jsonData)
+	}
+}
+
 func TestParseFlagsDefaults(t *testing.T) {
 	result, err := parseFlags(nil, &bytes.Buffer{})
 	if err != nil {
@@ -223,6 +265,11 @@ func TestValidationRejectsInvalidFrequencies(t *testing.T) {
 			name: "negative max aliases",
 			args: []string{"--max-aliases", "-1"},
 			want: "--max-aliases must be >= 0",
+		},
+		{
+			name: "invalid generated at",
+			args: []string{"--generated-at", "2026-06-01 14:30:22"},
+			want: "--generated-at must be an RFC3339 timestamp",
 		},
 	}
 
@@ -366,7 +413,7 @@ func TestRunPipelineWithFixtureHistoriesWritesExpectedFilesAndSummary(t *testing
 		"cmd-mint: analyzed shell history locally",
 		"Sources scanned:",
 		"parsed 3 / skipped 0",
-		"Safe commands analyzed: 6",
+		"Non-sensitive commands analyzed: 6",
 		"Top tools:",
 		"git",
 		"Top alias suggestions:",
@@ -391,11 +438,13 @@ func TestRunPipelineOmitsRawSensitiveCommandsFromSummaryAndArtifacts(t *testing.
 	dir := t.TempDir()
 	history := filepath.Join(dir, "zsh.history")
 	sensitive := `curl -H "Authorization: Bearer raw-secret-token" https://example.invalid`
+	separatedSensitive := `heroku config:set STRIPE_SECRET sk_live_123456789`
 	content := strings.Join([]string{
 		"git status",
 		"git status",
 		"git status",
 		sensitive,
+		separatedSensitive,
 	}, "\n") + "\n"
 	if err := os.WriteFile(history, []byte(content), 0o600); err != nil {
 		t.Fatalf("WriteFile(%q) error = %v", history, err)
@@ -425,13 +474,13 @@ func TestRunPipelineOmitsRawSensitiveCommandsFromSummaryAndArtifacts(t *testing.
 	}
 
 	for _, text := range outputs {
-		for _, forbidden := range []string{sensitive, "raw-secret-token", "Authorization: Bearer"} {
+		for _, forbidden := range []string{sensitive, "raw-secret-token", "Authorization: Bearer", "STRIPE_SECRET", "sk_live_123456789"} {
 			if strings.Contains(text, forbidden) {
 				t.Fatalf("output contains forbidden sensitive text %q:\n%s", forbidden, text)
 			}
 		}
 	}
-	if !strings.Contains(stdout.String(), "Sensitive-looking commands skipped: 1") {
+	if !strings.Contains(stdout.String(), "Sensitive-looking commands skipped: 2") {
 		t.Fatalf("terminal summary missing sensitive aggregate:\n%s", stdout.String())
 	}
 }

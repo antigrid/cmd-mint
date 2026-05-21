@@ -111,6 +111,8 @@ func SafeCommandSummariesFromAggregates(commands []CommandAggregate) []model.Saf
 			Tool:              command.Tool,
 			Subcommand:        command.Subcommand,
 			SourceShells:      append([]model.Shell(nil), command.SourceShells...),
+			RiskFlags:         append([]model.RiskFlag(nil), command.RiskFlags...),
+			ExclusionReasons:  append([]model.ExclusionReason(nil), command.ExclusionReasons...),
 		})
 	}
 	return summaries

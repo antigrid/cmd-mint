@@ -6,7 +6,7 @@ It is designed for terminal-heavy developers who want useful shortcuts without s
 
 ## What cmd-mint Does
 
-`cmd-mint` reads supported local shell history files, identifies repeated safe commands and command patterns, and writes a personalized developer cheat sheet plus safe alias suggestions. It groups commands by tools such as `git`, `docker`, `npm`, and `kubectl`, summarizes sensitive or risky exclusions without exposing raw skipped commands, and leaves all adoption decisions to you.
+`cmd-mint` reads supported local shell history files, identifies repeated non-sensitive commands and command patterns, and writes a personalized developer cheat sheet plus safe alias suggestions. It groups commands by tools such as `git`, `docker`, `npm`, and `kubectl`, summarizes sensitive exclusions without exposing raw skipped commands, labels risky non-sensitive observations when they appear, and leaves all adoption decisions to you.
 
 ## Privacy Model
 
@@ -20,7 +20,7 @@ It is designed for terminal-heavy developers who want useful shortcuts without s
 - Does not modify shell history files.
 - Does not modify shell config files such as `.zshrc`, `.bashrc`, `.bash_aliases`, or `config.fish`.
 - Does not install aliases automatically.
-- Skips sensitive-looking commands from generated outputs.
+- Skips sensitive-looking commands from generated outputs except aggregate counts and categories.
 
 Generated reports are still derived from your local shell history. They may reveal private workflows, project names, hosts, branch names, namespaces, or operational habits. Review generated files before sharing, committing, or pasting them anywhere.
 
@@ -54,7 +54,7 @@ By default, it:
 
 1. Auto-discovers supported shell history files.
 2. Reads shell config files only to detect existing alias-name conflicts.
-3. Analyzes safe parsed commands.
+3. Analyzes non-sensitive parsed commands.
 4. Creates a timestamped report directory in the current directory.
 5. Writes `cheatsheet.md` and alias suggestion files.
 6. Prints a concise terminal summary.
@@ -72,6 +72,7 @@ cmd-mint \
   --history-file ~/.zsh_history \
   --shell zsh \
   --output-dir ./cmd-mint-report \
+  --generated-at 2026-06-01T14:30:22Z \
   --json
 ```
 
@@ -87,6 +88,7 @@ cmd-mint \
 | `--no-alias-file` | `false` | Skips alias snippet file generation. The cheat sheet can still include alias suggestions. |
 | `--json` | `false` | Also writes safe `report.json`. |
 | `--verbose` | `false` | Prints more parsing and exclusion summary information without raw sensitive commands. |
+| `--generated-at TIME` | current time | Uses an RFC3339 timestamp in generated reports. Useful with `--output-dir` for byte-for-byte reproducible artifacts. |
 | `--version` | `false` | Prints version, commit, and build date, then exits. |
 | `--help` | `false` | Prints help, then exits. |
 
@@ -101,7 +103,9 @@ cmd-mint \
 | `aliases.suggested.fish` | Fish input is detected or `--shell fish` is used | Fish-compatible alias suggestions. Not installed automatically. |
 | `report.json` | Only with `--json` | Safe machine-readable report for tests, debugging, and future integrations. |
 
-The report summarizes skipped sensitive or risky commands only in aggregate. It should not contain raw sensitive skipped commands.
+The report summarizes skipped sensitive commands only in aggregate. Risky non-sensitive commands may appear in `cheatsheet.md` and `report.json` only as observed commands labeled as risky and excluded from alias suggestions. They are never emitted as alias suggestions or presented as recommended shortcuts.
+
+Generated output ordering is deterministic for the same inputs and flags. The default report timestamp and default timestamped output directory are intentionally run-specific; pass both `--output-dir` and `--generated-at` when you need byte-for-byte reproducible artifacts.
 
 ## Reviewing and Adopting Aliases
 
@@ -181,9 +185,9 @@ Warnings do not fail a run unless no usable input remains or output cannot be wr
 
 ## Security Notes
 
-`cmd-mint` uses conservative filtering before rendering output. Commands that look like they contain passwords, tokens, API keys, auth headers, private keys, credential files, `.env` files, database URLs with credentials, kubeconfig secrets, clipboard/keychain extraction, or similar sensitive material are excluded from generated command output.
+`cmd-mint` uses conservative filtering before rendering output. Commands that look like they contain passwords, tokens, API keys, separated secret names and values, auth headers, private keys, credential files, `.env` files, database URLs with credentials, kubeconfig secrets, clipboard/keychain extraction, or similar sensitive material are excluded from generated command output.
 
-Alias suggestions are stricter than the cheat sheet. Destructive or high-risk commands, production-like deploy/delete actions, multiline commands, low-confidence candidates, and alias-name conflicts are excluded from alias files.
+Alias suggestions are stricter than the cheat sheet. Destructive or high-risk commands, production-like deploy/delete actions, multiline commands, low-confidence candidates, and alias-name conflicts are excluded from alias files. Risky non-sensitive commands can be shown only as risky observations in the cheat sheet.
 
 The tool is still analyzing personal history. Treat generated reports as private until reviewed.
 

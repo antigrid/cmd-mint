@@ -24,7 +24,7 @@ func TestRenderTerminalSummaryIncludesRequiredFieldsAndPrivacyNote(t *testing.T)
 		"Sources scanned:",
 		"/home/alex/.zsh_history",
 		"parsed 10 / skipped 2",
-		"Safe commands analyzed: 14",
+		"Non-sensitive commands analyzed: 14",
 		"Sensitive-looking commands skipped: 2",
 		"Risky commands excluded from aliases: 1",
 		"Alias conflicts skipped: 1",

@@ -18,7 +18,7 @@ func (classification SensitivityClassification) Sensitive() bool {
 
 var (
 	secretAssignmentRE = regexp.MustCompile(`(?i)(^|[^a-z0-9_])(?:password|passwd|token|api[_-]?key|apikey|secret|client[_-]?secret|access[_-]?key|refresh[_-]?token|aws_secret_access_key|npm_token|node_auth_token|_authtoken)\s*[:=]`)
-	secretNameRE       = regexp.MustCompile(`(?i)\b(?:AWS_SECRET_ACCESS_KEY|NPM_TOKEN|NODE_AUTH_TOKEN|_authToken)\b`)
+	secretNameRE       = regexp.MustCompile(`(?i)\b(?:(?:[a-z0-9]+[_-])+(?:password|passwd|token|api[_-]?key|apikey|secret|secret[_-]?key|client[_-]?secret|access[_-]?key|refresh[_-]?token)(?:[_-][a-z0-9]+)*|password|passwd|token|api[_-]?key|apikey|secret|secret[_-]?key|client[_-]?secret|access[_-]?key|refresh[_-]?token|AWS_SECRET_ACCESS_KEY|NPM_TOKEN|NODE_AUTH_TOKEN|_authToken)\b`)
 	authHeaderRE       = regexp.MustCompile(`(?i)\bauthorization\s*:\s*(?:bearer|basic|token)\b`)
 	cookieHeaderRE     = regexp.MustCompile(`(?i)(\bcookie\s*:|--cookie(?:=|\s+))`)
 	privateKeyRE       = regexp.MustCompile(`(?i)(-----BEGIN [A-Z ]*PRIVATE KEY-----|\bPRIVATE KEY\b|\bid_(?:rsa|dsa|ecdsa|ed25519)\b|\bssh_host_[a-z0-9_]*_key\b|\.(?:pem|p12|pfx)\b)`)
@@ -75,6 +75,7 @@ func classifySensitivity(command string, tokens []string) SensitivityClassificat
 	for i, token := range tokens {
 		lower := strings.ToLower(token)
 		check(model.SensitivitySecret, model.ExclusionSensitiveSecret, tokenLooksSecret(lower))
+		check(model.SensitivitySecret, model.ExclusionSensitiveSecret, tokenLooksSecretName(lower))
 		check(model.SensitivityAuthHeader, model.ExclusionSensitiveAuthHeader, tokenLooksAuthHeader(tokens, i))
 		check(model.SensitivityCredentialFile, model.ExclusionSensitiveCredentialFile, tokenLooksCredentialFile(lower))
 		check(model.SensitivityPrivateKey, model.ExclusionSensitivePrivateKey, tokenLooksPrivateKey(lower))
@@ -109,6 +110,51 @@ func tokenLooksSecret(token string) bool {
 	}
 	for _, flag := range []string{"--password", "--token", "--secret", "--api-key", "--apikey"} {
 		if strings.HasPrefix(token, flag) {
+			return true
+		}
+	}
+	return false
+}
+
+func tokenLooksSecretName(token string) bool {
+	token = strings.Trim(token, `'"`)
+	if token == "" || strings.ContainsAny(token, `/\`) || strings.HasPrefix(token, "-") {
+		return false
+	}
+	if isAssignment(token) {
+		return false
+	}
+
+	normalized := strings.NewReplacer("-", "_", ".", "_").Replace(token)
+	words := strings.FieldsFunc(normalized, func(r rune) bool {
+		return r == '_'
+	})
+	for i, word := range words {
+		switch word {
+		case "password", "passwd", "token", "apikey", "secret":
+			return true
+		case "key":
+			if i > 0 && words[i-1] == "api" {
+				return true
+			}
+		}
+	}
+
+	for _, marker := range []string{
+		"apikey",
+		"api_key",
+		"secretkey",
+		"secret_key",
+		"clientsecret",
+		"client_secret",
+		"accesskey",
+		"access_key",
+		"refreshtoken",
+		"refresh_token",
+		"authtoken",
+		"auth_token",
+	} {
+		if strings.Contains(normalized, marker) {
 			return true
 		}
 	}

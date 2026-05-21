@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -157,6 +156,7 @@ func TestEndToEndDeterministicOutputSnapshot(t *testing.T) {
 			"--output-dir", outputDir,
 			"--min-frequency", "2",
 			"--max-aliases", "5",
+			"--generated-at", "2026-06-01T14:30:22Z",
 			"--json",
 		}, &stdout, &stderr, version.BuildInfo{})
 
@@ -417,8 +417,6 @@ func normalizeE2ESnapshot(t *testing.T, snapshot string, runRoot string, fixture
 
 	normalized := strings.ReplaceAll(snapshot, filepath.Clean(runRoot), "<RUN>")
 	normalized = strings.ReplaceAll(normalized, fixtureRoot, "<FIXTURE>")
-	normalized = regexp.MustCompile(`Generated locally by cmd-mint on [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\.`).ReplaceAllString(normalized, "Generated locally by cmd-mint on <TIME>.")
-	normalized = regexp.MustCompile(`"generated_at": "[^"]+"`).ReplaceAllString(normalized, `"generated_at": "<TIME>"`)
 	return normalized
 }
 

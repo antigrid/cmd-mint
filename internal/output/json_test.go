@@ -50,6 +50,12 @@ func TestRenderReportJSONOmitsFakeSensitiveCommandsAndTokens(t *testing.T) {
 		Frequency:         99,
 		Confidence:        model.ConfidenceHigh,
 		AliasFileEligible: true,
+	}, model.AliasSuggestion{
+		Name:              "splitsecret",
+		Command:           "heroku config:set STRIPE_SECRET sk_live_123456789",
+		Frequency:         99,
+		Confidence:        model.ConfidenceHigh,
+		AliasFileEligible: true,
 	})
 	report.ToolSections = append(report.ToolSections, model.ToolSection{
 		Tool:  "curl",
@@ -60,6 +66,12 @@ func TestRenderReportJSONOmitsFakeSensitiveCommandsAndTokens(t *testing.T) {
 				NormalizedCommand: fakeSensitiveCommand,
 				Count:             1,
 				Tool:              "curl",
+			},
+			{
+				Command:           "heroku config:set STRIPE_SECRET sk_live_123456789",
+				NormalizedCommand: "heroku config:set STRIPE_SECRET sk_live_123456789",
+				Count:             1,
+				Tool:              "heroku",
 			},
 		},
 	})
@@ -82,6 +94,8 @@ func TestRenderReportJSONOmitsFakeSensitiveCommandsAndTokens(t *testing.T) {
 		"raw-secret-token",
 		"Authorization: Bearer",
 		"alias leak",
+		"STRIPE_SECRET",
+		"sk_live_123456789",
 	} {
 		if strings.Contains(output, forbidden) {
 			t.Fatalf("report JSON contains forbidden %q:\n%s", forbidden, output)

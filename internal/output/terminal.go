@@ -37,7 +37,7 @@ func RenderTerminalSummary(report model.Report, options TerminalSummaryOptions) 
 	}
 	fmt.Fprintln(&buffer)
 
-	fmt.Fprintf(&buffer, "Safe commands analyzed: %d\n", report.Summary.SafeCommandsAnalyzed)
+	fmt.Fprintf(&buffer, "Non-sensitive commands analyzed: %d\n", report.Summary.SafeCommandsAnalyzed)
 	fmt.Fprintf(&buffer, "Sensitive-looking commands skipped: %d\n", report.Summary.SensitiveCommandsSkipped)
 	fmt.Fprintf(&buffer, "Risky commands excluded from aliases: %d\n", report.Summary.RiskyCommandsExcluded)
 	fmt.Fprintf(&buffer, "Alias conflicts skipped: %d\n", report.Summary.AliasConflictsSkipped)

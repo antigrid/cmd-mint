@@ -92,6 +92,9 @@ func run(args []string, stdout io.Writer, stderr io.Writer, build version.BuildI
 	}
 
 	now := nowFunc()
+	if result.Options.GeneratedAt != nil {
+		now = *result.Options.GeneratedAt
+	}
 	report := analyze.BuildReport(records, sources, analyze.ReportOptions{
 		GeneratedAt:     now,
 		MinFrequency:    result.Options.MinFrequency,
@@ -198,6 +201,7 @@ Flags:
   --no-alias-file        do not generate alias snippet files
   --json                 also write safe report.json
   --verbose              print extra safe parsing and exclusion summary information
+  --generated-at TIME    RFC3339 timestamp for deterministic generated reports
   --version              print version information and exit
   --help                 print help and exit
 

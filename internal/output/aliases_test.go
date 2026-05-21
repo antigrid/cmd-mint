@@ -101,6 +101,13 @@ func TestRenderAliasesFiltersIneligibleLowConfidenceAndSensitiveSuggestions(t *t
 			Confidence:        model.ConfidenceHigh,
 			AliasFileEligible: true,
 		},
+		{
+			Name:              "splitsecret",
+			Command:           "heroku config:set STRIPE_SECRET sk_live_123456789",
+			Frequency:         20,
+			Confidence:        model.ConfidenceHigh,
+			AliasFileEligible: true,
+		},
 	}, 25))
 
 	for _, want := range []string{"alias safe='git status'\n"} {
@@ -108,7 +115,7 @@ func TestRenderAliasesFiltersIneligibleLowConfidenceAndSensitiveSuggestions(t *t
 			t.Fatalf("alias output missing %q:\n%s", want, output)
 		}
 	}
-	for _, forbidden := range []string{"alias low=", "alias ineligible=", fakeSensitiveCommand, "raw-secret-token"} {
+	for _, forbidden := range []string{"alias low=", "alias ineligible=", fakeSensitiveCommand, "raw-secret-token", "STRIPE_SECRET", "sk_live_123456789"} {
 		if strings.Contains(output, forbidden) {
 			t.Fatalf("alias output contains forbidden %q:\n%s", forbidden, output)
 		}
