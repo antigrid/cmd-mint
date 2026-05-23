@@ -100,6 +100,36 @@ func TestClassifyRawSensitivityDetectsRequiredPatterns(t *testing.T) {
 			reason: model.ExclusionSensitiveCredentialFile,
 		},
 		{
+			name:   "kubeconfig flag with separate value",
+			raw:    `kubectl --kubeconfig /tmp/prod.yaml get pods`,
+			flag:   model.SensitivityCredentialFile,
+			reason: model.ExclusionSensitiveCredentialFile,
+		},
+		{
+			name:   "kubeconfig flag with equals value",
+			raw:    `kubectl --kubeconfig=/tmp/prod.yaml get pods`,
+			flag:   model.SensitivityCredentialFile,
+			reason: model.ExclusionSensitiveCredentialFile,
+		},
+		{
+			name:   "docker auth config",
+			raw:    `cat ~/.docker/config.json`,
+			flag:   model.SensitivityCredentialFile,
+			reason: model.ExclusionSensitiveCredentialFile,
+		},
+		{
+			name:   "private key extension",
+			raw:    `openssl rsa -in ./certs/client.key -check`,
+			flag:   model.SensitivityPrivateKey,
+			reason: model.ExclusionSensitivePrivateKey,
+		},
+		{
+			name:   "certificate file",
+			raw:    `curl --cert ./certs/client.crt https://example.invalid`,
+			flag:   model.SensitivityCredentialFile,
+			reason: model.ExclusionSensitiveCredentialFile,
+		},
+		{
 			name:   "gpg decrypt clipboard-like extraction",
 			raw:    `gpg --decrypt secrets.asc`,
 			flag:   model.SensitivityClipboardOrKeychain,

@@ -109,6 +109,31 @@ func TestAggregateRecordsTreatsSuspiciousControlCharactersAsMalformed(t *testing
 	}
 }
 
+func TestAggregateRecordsClassifiesSensitiveControlCharacterCommandsBeforeMalformed(t *testing.T) {
+	result := AggregateRecords([]model.CommandRecord{
+		rawRecord(model.ShellBash, "/home/alex/.bash_history", "curl -H 'Authorization: Bearer fake-token' https://example.invalid\x00"),
+		rawRecord(model.ShellBash, "/home/alex/.bash_history", "git status"),
+	}, nil, AggregateOptions{})
+
+	if result.Summary.SafeCommandsAnalyzed != 1 {
+		t.Fatalf("SafeCommandsAnalyzed = %d, want 1", result.Summary.SafeCommandsAnalyzed)
+	}
+	if result.Summary.SensitiveCommandsSkipped != 1 {
+		t.Fatalf("SensitiveCommandsSkipped = %d, want 1", result.Summary.SensitiveCommandsSkipped)
+	}
+	if got := result.Exclusions.ByReason[model.ExclusionSensitiveAuthHeader]; got != 1 {
+		t.Fatalf("sensitive auth header count = %d, want 1", got)
+	}
+	if result.Exclusions.MalformedCommandCount != 0 {
+		t.Fatalf("MalformedCommandCount = %d, want 0 for sensitive control-character command", result.Exclusions.MalformedCommandCount)
+	}
+	for command := range result.CommandAggregates {
+		if strings.Contains(command, "fake-token") || strings.Contains(command, "Authorization") {
+			t.Fatalf("sensitive control-character command entered safe aggregates: %q", command)
+		}
+	}
+}
+
 func TestAggregateRecordsTracksSourceWarningsMalformedAndLowFrequencyCounts(t *testing.T) {
 	source := model.SourceSummary{
 		SourceShell:    model.ShellZsh,

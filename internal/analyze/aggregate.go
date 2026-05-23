@@ -106,12 +106,6 @@ func (builder *AggregateBuilder) AddRecord(record model.CommandRecord) {
 		builder.countUnparsedRecord(record)
 		return
 	}
-	if HasSuspiciousControl(record.RawCommand) {
-		builder.exclusions.MalformedCommandCount++
-		builder.countReason(model.ExclusionMalformedEntry)
-		return
-	}
-
 	if shouldAnalyzeRecord(record) {
 		record = AnalyzeRecord(record)
 	}
@@ -119,6 +113,12 @@ func (builder *AggregateBuilder) AddRecord(record model.CommandRecord) {
 	if IsSensitiveRecord(record) {
 		builder.summary.SensitiveCommandsSkipped++
 		builder.countSensitivity(record)
+		return
+	}
+
+	if HasSuspiciousControl(record.RawCommand) {
+		builder.exclusions.MalformedCommandCount++
+		builder.countReason(model.ExclusionMalformedEntry)
 		return
 	}
 

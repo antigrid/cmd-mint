@@ -108,6 +108,56 @@ func TestParseBashInvalidUTF8UsesSafeReplacementAndWarning(t *testing.T) {
 	}
 }
 
+func TestParseBashSkipsHeredocBlockWithoutEmittingBodyFragments(t *testing.T) {
+	history := strings.Join([]string{
+		"git status",
+		"cat <<EOF",
+		"opaque-body-fragment",
+		"Authorization: Bearer fake-token",
+		"EOF",
+		"docker ps",
+	}, "\n")
+
+	result, err := ParseBash(strings.NewReader(history), "/tmp/.bash_history")
+	if err != nil {
+		t.Fatalf("ParseBash() error = %v", err)
+	}
+
+	assertSummary(t, result.Summary, 6, 2, 4)
+	assertCommands(t, result.Commands, []string{
+		"git status",
+		"docker ps",
+	})
+	if len(result.Summary.Warnings) != 1 || result.Summary.Warnings[0] != bashMultilineSkipWarning {
+		t.Fatalf("Warnings = %#v, want one bash multiline warning", result.Summary.Warnings)
+	}
+	for _, command := range result.Commands {
+		if strings.Contains(command.RawCommand, "opaque-body-fragment") || strings.Contains(command.RawCommand, "fake-token") {
+			t.Fatalf("heredoc body fragment emitted as command: %#v", command)
+		}
+	}
+}
+
+func TestParseBashSkipsIncompleteQuotedMultilineEntry(t *testing.T) {
+	history := strings.Join([]string{
+		`printf "first line`,
+		"opaque-body-fragment",
+		`last line"`,
+		"git status",
+	}, "\n")
+
+	result, err := ParseBash(strings.NewReader(history), "/tmp/.bash_history")
+	if err != nil {
+		t.Fatalf("ParseBash() error = %v", err)
+	}
+
+	assertSummary(t, result.Summary, 4, 1, 3)
+	assertCommands(t, result.Commands, []string{"git status"})
+	if len(result.Summary.Warnings) != 1 || result.Summary.Warnings[0] != bashMultilineSkipWarning {
+		t.Fatalf("Warnings = %#v, want one bash multiline warning", result.Summary.Warnings)
+	}
+}
+
 func TestParseBashStreamsReader(t *testing.T) {
 	reader := &generatedLineReader{
 		line:      "git status\n",

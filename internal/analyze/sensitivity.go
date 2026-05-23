@@ -21,8 +21,8 @@ var (
 	secretNameRE       = regexp.MustCompile(`(?i)\b(?:(?:[a-z0-9]+[_-])+(?:password|passwd|token|api[_-]?key|apikey|secret|secret[_-]?key|client[_-]?secret|access[_-]?key|refresh[_-]?token)(?:[_-][a-z0-9]+)*|password|passwd|token|api[_-]?key|apikey|secret|secret[_-]?key|client[_-]?secret|access[_-]?key|refresh[_-]?token|AWS_SECRET_ACCESS_KEY|NPM_TOKEN|NODE_AUTH_TOKEN|_authToken)\b`)
 	authHeaderRE       = regexp.MustCompile(`(?i)\bauthorization\s*:\s*(?:bearer|basic|token)\b`)
 	cookieHeaderRE     = regexp.MustCompile(`(?i)(\bcookie\s*:|--cookie(?:=|\s+))`)
-	privateKeyRE       = regexp.MustCompile(`(?i)(-----BEGIN [A-Z ]*PRIVATE KEY-----|\bPRIVATE KEY\b|\bid_(?:rsa|dsa|ecdsa|ed25519)\b|\bssh_host_[a-z0-9_]*_key\b|\.(?:pem|p12|pfx)\b)`)
-	credentialFileRE   = regexp.MustCompile(`(?i)(^|[/\s'"=])(?:\.env(?:[.\w-]*)?|kubeconfig|\.kube/config|credentials(?:\.(?:json|ya?ml|ini|txt))?|secrets\.json|service[-_]account|\.aws/credentials|\.npmrc|\.netrc|docker/config\.json)\b`)
+	privateKeyRE       = regexp.MustCompile(`(?i)(-----BEGIN [A-Z ]*PRIVATE KEY-----|\bPRIVATE KEY\b|\bid_(?:rsa|dsa|ecdsa|ed25519)\b|\bssh_host_[a-z0-9_]*_key\b|\.(?:key|pem|p12|pfx)\b)`)
+	credentialFileRE   = regexp.MustCompile(`(?i)(^|[/\s'"=])(?:\.env(?:[.\w-]*)?|--kubeconfig(?:=|\b)|kubeconfig|\.kube/config|credentials(?:\.(?:json|ya?ml|ini|txt))?|secrets\.json|service[-_]account|\.aws/credentials|\.docker/config\.json|\.npmrc|\.netrc|docker/config\.json|[^/\s'"=]+\.(?:crt|cer|cert))\b`)
 	databaseURLRE      = regexp.MustCompile(`(?i)\b(?:postgres(?:ql)?|mysql|mariadb|redis|mongodb(?:\+srv)?|sqlserver)://[^\s'"<>/@:]+:[^\s'"<>/@]+@`)
 	privateURLRE       = regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://[^\s'"<>/@:]+:[^\s'"<>/@]+@`)
 	clipboardRE        = regexp.MustCompile(`(?i)(\b(?:pbpaste|xclip|xsel|wl-paste)\b|\bsecurity\s+find-(?:generic|internet)-password\b|\bsecret-tool\s+lookup\b|\bpass\s+(?:show|grep)\b|\bgpg\s+--decrypt\b)`)
@@ -185,6 +185,8 @@ func tokenLooksCredentialFile(token string) bool {
 	}
 	return base == ".env" ||
 		strings.HasPrefix(base, ".env.") ||
+		token == "--kubeconfig" ||
+		strings.HasPrefix(token, "--kubeconfig=") ||
 		base == "kubeconfig" ||
 		base == "credentials" ||
 		base == "secrets.json" ||
@@ -192,8 +194,12 @@ func tokenLooksCredentialFile(token string) bool {
 		base == "service_account" ||
 		base == ".npmrc" ||
 		base == ".netrc" ||
+		strings.HasSuffix(base, ".crt") ||
+		strings.HasSuffix(base, ".cer") ||
+		strings.HasSuffix(base, ".cert") ||
 		strings.HasSuffix(token, "/.kube/config") ||
 		strings.HasSuffix(token, "/.aws/credentials") ||
+		strings.HasSuffix(token, "/.docker/config.json") ||
 		strings.HasSuffix(token, "/docker/config.json")
 }
 
@@ -207,6 +213,7 @@ func tokenLooksPrivateKey(token string) bool {
 		base == "id_ecdsa" ||
 		base == "id_ed25519" ||
 		strings.HasPrefix(base, "ssh_host_") ||
+		strings.HasSuffix(base, ".key") ||
 		strings.HasSuffix(base, ".pem") ||
 		strings.HasSuffix(base, ".p12") ||
 		strings.HasSuffix(base, ".pfx")

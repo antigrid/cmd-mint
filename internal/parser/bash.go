@@ -13,7 +13,19 @@ import (
 	"cmd-mint/internal/model"
 )
 
-const invalidUTF8Warning = "invalid UTF-8 replaced while parsing history"
+const (
+	invalidUTF8Warning       = "invalid UTF-8 replaced while parsing history"
+	bashMultilineSkipWarning = "bash multiline history entries skipped"
+)
+
+type bashHeredocSkip struct {
+	delimiter string
+	stripTabs bool
+}
+
+type bashContinuationSkip struct {
+	quote rune
+}
 
 func ParseBashFile(path string) (Result, error) {
 	file, err := os.Open(path)
@@ -36,6 +48,9 @@ func ParseBash(r io.Reader, sourceFile string) (Result, error) {
 	reader := bufio.NewReaderSize(r, 64*1024)
 	var pendingTimestamp *time.Time
 	var warnedInvalidUTF8 bool
+	var warnedMultiline bool
+	var heredocSkip *bashHeredocSkip
+	var continuationSkip *bashContinuationSkip
 
 	for {
 		line, err := reader.ReadString('\n')
@@ -55,13 +70,40 @@ func ParseBash(r io.Reader, sourceFile string) (Result, error) {
 			}
 		}
 
-		if timestamp, ok := parseBashTimestampMarker(line); ok {
+		if heredocSkip != nil {
+			result.Summary.EntriesRead++
+			result.Summary.EntriesSkipped++
+			if bashHeredocDelimiterMatches(line, *heredocSkip) {
+				heredocSkip = nil
+			}
+			pendingTimestamp = nil
+		} else if continuationSkip != nil {
+			result.Summary.EntriesRead++
+			result.Summary.EntriesSkipped++
+			quote, needsMore := bashContinuationState(line, continuationSkip.quote)
+			if needsMore {
+				continuationSkip.quote = quote
+			} else {
+				continuationSkip = nil
+			}
+			pendingTimestamp = nil
+		} else if timestamp, ok := parseBashTimestampMarker(line); ok {
 			pendingTimestamp = &timestamp
 		} else {
 			command := strings.TrimSpace(line)
 			result.Summary.EntriesRead++
 			if command == "" {
 				result.Summary.EntriesSkipped++
+			} else if heredoc, ok := bashHeredocStart(command); ok {
+				result.Summary.EntriesSkipped++
+				pendingTimestamp = nil
+				heredocSkip = &heredoc
+				warnedMultiline = appendBashMultilineWarning(&result, warnedMultiline)
+			} else if quote, needsMore := bashContinuationState(command, 0); needsMore {
+				result.Summary.EntriesSkipped++
+				pendingTimestamp = nil
+				continuationSkip = &bashContinuationSkip{quote: quote}
+				warnedMultiline = appendBashMultilineWarning(&result, warnedMultiline)
 			} else {
 				timestamp := cloneTimePointer(pendingTimestamp)
 				result.Commands = append(result.Commands, model.CommandRecord{
@@ -90,6 +132,141 @@ func ParseBash(r io.Reader, sourceFile string) (Result, error) {
 	}
 
 	return result, nil
+}
+
+func appendBashMultilineWarning(result *Result, warned bool) bool {
+	if warned {
+		return true
+	}
+	result.Summary.Warnings = append(result.Summary.Warnings, bashMultilineSkipWarning)
+	return true
+}
+
+func bashHeredocStart(command string) (bashHeredocSkip, bool) {
+	tokens := bashShellFields(command)
+	for i, token := range tokens {
+		if token == "<<<" || strings.HasPrefix(token, "<<<") {
+			continue
+		}
+		switch token {
+		case "<<", "<<-":
+			if i+1 >= len(tokens) {
+				return bashHeredocSkip{}, false
+			}
+			return bashHeredocSkip{
+				delimiter: tokens[i+1],
+				stripTabs: token == "<<-",
+			}, true
+		default:
+			operator := strings.Index(token, "<<")
+			if operator == -1 {
+				continue
+			}
+			rest := token[operator+2:]
+			if strings.HasPrefix(rest, "<") {
+				continue
+			}
+			stripTabs := false
+			if strings.HasPrefix(rest, "-") {
+				stripTabs = true
+				rest = strings.TrimPrefix(rest, "-")
+			}
+			if rest == "" {
+				continue
+			}
+			return bashHeredocSkip{
+				delimiter: rest,
+				stripTabs: stripTabs,
+			}, true
+		}
+	}
+	return bashHeredocSkip{}, false
+}
+
+func bashHeredocDelimiterMatches(line string, heredoc bashHeredocSkip) bool {
+	if heredoc.delimiter == "" {
+		return true
+	}
+	candidate := line
+	if heredoc.stripTabs {
+		candidate = strings.TrimLeft(candidate, "\t")
+	}
+	return strings.TrimSpace(candidate) == heredoc.delimiter
+}
+
+func bashContinuationState(line string, quote rune) (rune, bool) {
+	escaped := false
+	for _, r := range line {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if r == '\\' && quote != '\'' {
+			escaped = true
+			continue
+		}
+		if quote == 0 && (r == '\'' || r == '"') {
+			quote = r
+			continue
+		}
+		if quote == r {
+			quote = 0
+		}
+	}
+	return quote, quote != 0 || escaped
+}
+
+func bashShellFields(line string) []string {
+	var fields []string
+	var builder strings.Builder
+	var quote rune
+	escaped := false
+	inToken := false
+
+	flush := func() {
+		if !inToken {
+			return
+		}
+		fields = append(fields, builder.String())
+		builder.Reset()
+		inToken = false
+	}
+
+	for _, r := range line {
+		if escaped {
+			builder.WriteRune(r)
+			inToken = true
+			escaped = false
+			continue
+		}
+		if r == '\\' && quote != '\'' {
+			escaped = true
+			inToken = true
+			continue
+		}
+		if quote == 0 && (r == ' ' || r == '\t') {
+			flush()
+			continue
+		}
+		if quote == 0 && (r == '\'' || r == '"') {
+			quote = r
+			inToken = true
+			continue
+		}
+		if quote == r {
+			quote = 0
+			inToken = true
+			continue
+		}
+		builder.WriteRune(r)
+		inToken = true
+	}
+	if escaped {
+		builder.WriteRune('\\')
+	}
+	flush()
+
+	return fields
 }
 
 func trimLineEnding(line string) string {
