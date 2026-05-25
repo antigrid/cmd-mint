@@ -66,6 +66,62 @@ func TestRenderCheatsheetMarkdownOmitsSensitiveCommandsAndShowsAggregates(t *tes
 	}
 }
 
+func TestRenderCheatsheetMarkdownFiltersSensitiveCommandsThatSlipIntoRenderData(t *testing.T) {
+	// Defense in depth: even if a sensitive command evades upstream
+	// classification and reaches the rendered report structures, the shared
+	// safeReport gate must strip it from cheatsheet.md.
+	report := sampleReport()
+	report.AliasSuggestions = append(report.AliasSuggestions, model.AliasSuggestion{
+		Name:       "leak",
+		Command:    fakeSensitiveCommand,
+		Tool:       "curl",
+		Frequency:  5,
+		Confidence: model.ConfidenceHigh,
+	})
+	report.ToolSections = append(report.ToolSections, model.ToolSection{
+		Tool:  "curl",
+		Count: 5,
+		Commands: []model.SafeCommandSummary{
+			{Command: fakeSensitiveCommand, NormalizedCommand: fakeSensitiveCommand, Count: 5, Tool: "curl"},
+		},
+	})
+	report.Patterns = append(report.Patterns, model.PatternSummary{
+		Pattern:  fakeSensitiveCommand,
+		Count:    5,
+		Examples: []string{fakeSensitiveCommand},
+	})
+
+	markdown := string(RenderCheatsheetMarkdown(report))
+
+	for _, forbidden := range []string{fakeSensitiveCommand, "raw-secret-token", "Authorization: Bearer"} {
+		if strings.Contains(markdown, forbidden) {
+			t.Fatalf("markdown leaked sensitive value %q:\n%s", forbidden, markdown)
+		}
+	}
+	if !strings.Contains(markdown, "git status") {
+		t.Fatalf("markdown dropped safe content alongside the sensitive command:\n%s", markdown)
+	}
+}
+
+func TestRenderTerminalSummaryFiltersSensitiveAliasThatSlipsIntoRenderData(t *testing.T) {
+	report := sampleReport()
+	report.AliasSuggestions = append(report.AliasSuggestions, model.AliasSuggestion{
+		Name:       "leak",
+		Command:    fakeSensitiveCommand,
+		Tool:       "curl",
+		Frequency:  99,
+		Confidence: model.ConfidenceHigh,
+	})
+
+	summary := string(RenderTerminalSummary(report, TerminalSummaryOptions{}))
+
+	for _, forbidden := range []string{fakeSensitiveCommand, "raw-secret-token", "Authorization: Bearer"} {
+		if strings.Contains(summary, forbidden) {
+			t.Fatalf("terminal summary leaked sensitive value %q:\n%s", forbidden, summary)
+		}
+	}
+}
+
 func TestRenderCheatsheetMarkdownIncludesAliasDetails(t *testing.T) {
 	markdown := string(RenderCheatsheetMarkdown(sampleReport()))
 

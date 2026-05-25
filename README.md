@@ -187,6 +187,8 @@ Warnings do not fail a run unless no usable input remains or output cannot be wr
 
 `cmd-mint` uses conservative filtering before rendering output. Commands that look like they contain passwords, tokens, API keys, separated secret names and values, auth headers, private keys, credential files, `.env` files, database URLs with credentials, kubeconfig secrets, clipboard/keychain extraction, or similar sensitive material are excluded from generated command output.
 
+Detection is primarily name- and pattern-based: it recognizes recognizable secret names, flags, file types, and URL shapes. It does not perform entropy analysis, so a bare high-entropy value with no surrounding context (for example, a raw key pasted as a positional argument) may not be detected. Multiline commands are excluded entirely rather than reassembled. Always review generated reports before sharing.
+
 Alias suggestions are stricter than the cheat sheet. Destructive or high-risk commands, production-like deploy/delete actions, multiline commands, low-confidence candidates, and alias-name conflicts are excluded from alias files. Risky non-sensitive commands can be shown only as risky observations in the cheat sheet.
 
 The tool is still analyzing personal history. Treat generated reports as private until reviewed.

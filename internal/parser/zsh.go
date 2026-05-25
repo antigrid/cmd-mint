@@ -13,7 +13,10 @@ import (
 	"cmd-mint/internal/model"
 )
 
-const malformedZshExtendedWarning = "malformed zsh extended history entries skipped"
+const (
+	malformedZshExtendedWarning = "malformed zsh extended history entries skipped"
+	zshMultilineSkipWarning     = "zsh multiline history entries skipped"
+)
 
 func ParseZshFile(path string) (Result, error) {
 	file, err := os.Open(path)
@@ -36,6 +39,8 @@ func ParseZsh(r io.Reader, sourceFile string) (Result, error) {
 	reader := bufio.NewReaderSize(r, 64*1024)
 	var warnedInvalidUTF8 bool
 	var warnedMalformedExtended bool
+	var warnedMultiline bool
+	var continuationSkip *shellContinuationSkip
 
 	for {
 		line, err := reader.ReadString('\n')
@@ -56,26 +61,49 @@ func ParseZsh(r io.Reader, sourceFile string) (Result, error) {
 		}
 
 		result.Summary.EntriesRead++
-		command, timestamp, status := parseZshEntry(line)
-		switch status {
-		case model.ParseStatusParsed:
-			result.Commands = append(result.Commands, model.CommandRecord{
-				SourceShell: model.ShellZsh,
-				SourceFile:  sourceFile,
-				EntryIndex:  result.Summary.EntriesRead,
-				Timestamp:   timestamp,
-				RawCommand:  command,
-				ParseStatus: model.ParseStatusParsed,
-			})
-			result.Summary.EntriesParsed++
-		case model.ParseStatusMalformedEntry:
+
+		if continuationSkip != nil {
+			// Subsequent physical lines of a multiline command carry no entry
+			// metadata. Skip them so command fragments (which may include secret
+			// values stripped of the naming context that flags them) never become
+			// their own records.
 			result.Summary.EntriesSkipped++
-			if !warnedMalformedExtended {
-				result.Summary.Warnings = append(result.Summary.Warnings, malformedZshExtendedWarning)
-				warnedMalformedExtended = true
+			if quote, needsMore := shellContinuationState(line, continuationSkip.quote); needsMore {
+				continuationSkip.quote = quote
+			} else {
+				continuationSkip = nil
 			}
-		default:
-			result.Summary.EntriesSkipped++
+		} else {
+			command, timestamp, status := parseZshEntry(line)
+			switch status {
+			case model.ParseStatusParsed:
+				if quote, needsMore := shellContinuationState(command, 0); needsMore {
+					// zsh persists multiline commands by escaping each embedded
+					// newline with a trailing backslash, so the continuation state
+					// also covers heredocs and quoted blocks.
+					result.Summary.EntriesSkipped++
+					continuationSkip = &shellContinuationSkip{quote: quote}
+					warnedMultiline = appendZshMultilineWarning(&result, warnedMultiline)
+					break
+				}
+				result.Commands = append(result.Commands, model.CommandRecord{
+					SourceShell: model.ShellZsh,
+					SourceFile:  sourceFile,
+					EntryIndex:  result.Summary.EntriesRead,
+					Timestamp:   timestamp,
+					RawCommand:  command,
+					ParseStatus: model.ParseStatusParsed,
+				})
+				result.Summary.EntriesParsed++
+			case model.ParseStatusMalformedEntry:
+				result.Summary.EntriesSkipped++
+				if !warnedMalformedExtended {
+					result.Summary.Warnings = append(result.Summary.Warnings, malformedZshExtendedWarning)
+					warnedMalformedExtended = true
+				}
+			default:
+				result.Summary.EntriesSkipped++
+			}
 		}
 
 		if err != nil {
@@ -87,6 +115,14 @@ func ParseZsh(r io.Reader, sourceFile string) (Result, error) {
 	}
 
 	return result, nil
+}
+
+func appendZshMultilineWarning(result *Result, warned bool) bool {
+	if warned {
+		return true
+	}
+	result.Summary.Warnings = append(result.Summary.Warnings, zshMultilineSkipWarning)
+	return true
 }
 
 func parseZshEntry(line string) (string, *time.Time, model.ParseStatus) {

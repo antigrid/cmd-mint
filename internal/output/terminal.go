@@ -18,6 +18,7 @@ type TerminalSummaryOptions struct {
 }
 
 func RenderTerminalSummary(report model.Report, options TerminalSummaryOptions) []byte {
+	report = safeReport(report)
 	var buffer bytes.Buffer
 
 	fmt.Fprintln(&buffer, "cmd-mint: analyzed shell history locally")

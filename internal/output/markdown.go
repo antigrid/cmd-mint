@@ -14,6 +14,7 @@ const generatedAtFormat = "2006-01-02 15:04:05"
 // RenderCheatsheetMarkdown renders the human-readable report from safe report
 // data only. Sensitive skipped commands are represented only by aggregate counts.
 func RenderCheatsheetMarkdown(report model.Report) []byte {
+	report = safeReport(report)
 	var buffer bytes.Buffer
 
 	fmt.Fprintln(&buffer, "# Shell History Cheat Sheet")

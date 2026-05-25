@@ -113,6 +113,52 @@ func TestParseZshMalformedExtendedEntriesAreSkippedWithoutRawWarningLeakage(t *t
 	}
 }
 
+func TestParseZshMultilineEntriesAreSkippedSoContinuationFragmentsNeverLeak(t *testing.T) {
+	const secretValue = "supersecretvalue123"
+	// zsh persists multiline commands by escaping each embedded newline with a
+	// trailing backslash. The continuation line carries no entry metadata, so a
+	// naive line-at-a-time parser would emit the bare secret value as its own
+	// command, stripped of the assignment that flags it as sensitive.
+	history := strings.Join([]string{
+		": 1717180000:0;git status",
+		": 1717180001:0;export API_TOKEN=\\",
+		secretValue,
+		": 1717180002:0;cat <<EOF\\",
+		"another " + secretValue + "\\",
+		"EOF",
+		"docker ps",
+	}, "\n")
+
+	result, err := ParseZsh(strings.NewReader(history), "/tmp/.zsh_history")
+	if err != nil {
+		t.Fatalf("ParseZsh() error = %v", err)
+	}
+
+	assertZshSummary(t, result.Summary, 7, 2, 5)
+	assertCommands(t, result.Commands, []string{
+		"git status",
+		"docker ps",
+	})
+	for _, command := range result.Commands {
+		if strings.Contains(command.RawCommand, secretValue) {
+			t.Fatalf("multiline continuation fragment leaked into a record: %q", command.RawCommand)
+		}
+	}
+
+	foundMultilineWarning := false
+	for _, warning := range result.Summary.Warnings {
+		if warning == zshMultilineSkipWarning {
+			foundMultilineWarning = true
+		}
+		if strings.Contains(warning, secretValue) {
+			t.Fatalf("warning leaks multiline command data: %q", warning)
+		}
+	}
+	if !foundMultilineWarning {
+		t.Fatalf("Warnings = %#v, want %q", result.Summary.Warnings, zshMultilineSkipWarning)
+	}
+}
+
 func TestParseZshSkipsBlankLines(t *testing.T) {
 	result, err := ParseZsh(strings.NewReader("\n  \r\n git status \n"), "/tmp/.zsh_history")
 	if err != nil {

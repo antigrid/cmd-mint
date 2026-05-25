@@ -23,7 +23,7 @@ type bashHeredocSkip struct {
 	stripTabs bool
 }
 
-type bashContinuationSkip struct {
+type shellContinuationSkip struct {
 	quote rune
 }
 
@@ -50,7 +50,7 @@ func ParseBash(r io.Reader, sourceFile string) (Result, error) {
 	var warnedInvalidUTF8 bool
 	var warnedMultiline bool
 	var heredocSkip *bashHeredocSkip
-	var continuationSkip *bashContinuationSkip
+	var continuationSkip *shellContinuationSkip
 
 	for {
 		line, err := reader.ReadString('\n')
@@ -80,7 +80,7 @@ func ParseBash(r io.Reader, sourceFile string) (Result, error) {
 		} else if continuationSkip != nil {
 			result.Summary.EntriesRead++
 			result.Summary.EntriesSkipped++
-			quote, needsMore := bashContinuationState(line, continuationSkip.quote)
+			quote, needsMore := shellContinuationState(line, continuationSkip.quote)
 			if needsMore {
 				continuationSkip.quote = quote
 			} else {
@@ -99,10 +99,10 @@ func ParseBash(r io.Reader, sourceFile string) (Result, error) {
 				pendingTimestamp = nil
 				heredocSkip = &heredoc
 				warnedMultiline = appendBashMultilineWarning(&result, warnedMultiline)
-			} else if quote, needsMore := bashContinuationState(command, 0); needsMore {
+			} else if quote, needsMore := shellContinuationState(command, 0); needsMore {
 				result.Summary.EntriesSkipped++
 				pendingTimestamp = nil
-				continuationSkip = &bashContinuationSkip{quote: quote}
+				continuationSkip = &shellContinuationSkip{quote: quote}
 				warnedMultiline = appendBashMultilineWarning(&result, warnedMultiline)
 			} else {
 				timestamp := cloneTimePointer(pendingTimestamp)
@@ -194,7 +194,11 @@ func bashHeredocDelimiterMatches(line string, heredoc bashHeredocSkip) bool {
 	return strings.TrimSpace(candidate) == heredoc.delimiter
 }
 
-func bashContinuationState(line string, quote rune) (rune, bool) {
+// shellContinuationState reports whether a physical history line leaves a
+// command open across a newline, either via a trailing unescaped backslash or
+// an unterminated quote. It is shared by the bash and zsh parsers because both
+// shells persist multiline commands using the same continuation conventions.
+func shellContinuationState(line string, quote rune) (rune, bool) {
 	escaped := false
 	for _, r := range line {
 		if escaped {
