@@ -1,3 +1,19 @@
 .DS_Store
+
+# Build outputs
 /cmd-mint
+/dist/
+
+# Generated reports
+/shell-history-report-*/
+/cmd-mint-report/
+
+# Local temp output
 /.tmp/
+
+# Coverage artifacts
+/coverage.out
+*.coverprofile
+
+# Local workspace metadata
+AGENTS.md
