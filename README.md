@@ -197,5 +197,7 @@ The tool is still analyzing personal history. Treat generated reports as private
 
 - [Privacy notes](docs/privacy.md)
 - [Troubleshooting](docs/troubleshooting.md)
+- [Design notes](docs/design.md)
+- [Roadmap draft](docs/roadmap.md)
 - [Release process](docs/release.md)
 - [Maintenance notes](docs/maintenance.md)

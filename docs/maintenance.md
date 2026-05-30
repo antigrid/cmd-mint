@@ -2,6 +2,8 @@
 
 `cmd-mint` is intentionally modular so new shells, filters, alias conventions, and output formats can be added without weakening the local-only MVP guarantees.
 
+See [Design Notes](design.md) for pipeline, raw command lifetime, alias eligibility, and deterministic ordering contracts. Use [Roadmap Draft](roadmap.md) for post-MVP feature planning.
+
 ## Safety Invariants
 
 Preserve these invariants when changing the code:
@@ -83,19 +85,3 @@ When changing renderers:
 - Do not include comments containing sensitive command data.
 - Preserve restrictive file permissions where supported.
 - Keep output ordering deterministic except for generation timestamps and default report directory names.
-
-## Future Extension Candidates
-
-These are possible post-MVP extensions, not current MVP behavior:
-
-- Config file for thresholds and ignored tools.
-- Interactive alias review.
-- Shell function suggestions for parameterized patterns.
-- Safer redaction mode.
-- Shell completion scripts.
-- Homebrew distribution.
-- Additional shells.
-- PowerShell support.
-- Trend reports across runs.
-- Project-local mode.
-- TUI review workflow.
