@@ -99,6 +99,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer, build version.BuildI
 		GeneratedAt:     now,
 		MinFrequency:    result.Options.MinFrequency,
 		MaxAliases:      result.Options.MaxAliases,
+		IgnoredTools:    result.Options.IgnoredTools,
+		RiskTolerance:   result.Options.RiskTolerance,
 		ExistingAliases: shellConfig.Aliases,
 		Warnings:        append(shellConfig.Warnings, parseWarnings...),
 	})
@@ -120,10 +122,14 @@ func run(args []string, stdout io.Writer, stderr io.Writer, build version.BuildI
 		return ExitInternalError
 	}
 
-	generatedPaths := []string{filepath.Join(outputDir, output.ArtifactCheatsheet)}
-	if err := output.WriteArtifact(outputDir, output.ArtifactCheatsheet, output.RenderCheatsheetMarkdown(report)); err != nil {
-		fmt.Fprintf(stderr, "cmd-mint: output error: %v\n", err)
-		return ExitOutputError
+	var generatedPaths []string
+	if containsString(result.Options.OutputFormats, outputFormatMarkdown) {
+		cheatsheetPath := filepath.Join(outputDir, output.ArtifactCheatsheet)
+		if err := output.WriteArtifact(outputDir, output.ArtifactCheatsheet, output.RenderCheatsheetMarkdown(report)); err != nil {
+			fmt.Fprintf(stderr, "cmd-mint: output error: %v\n", err)
+			return ExitOutputError
+		}
+		generatedPaths = append(generatedPaths, cheatsheetPath)
 	}
 
 	artifactPaths, err := output.WriteAliasAndJSONArtifacts(outputDir, report, output.ArtifactOptions{
@@ -196,8 +202,12 @@ Flags:
   --history-file PATH    history file to scan; repeat for multiple files
   --shell SHELL          shell format for explicit history files: bash, zsh, fish, or auto (default auto)
   --output-dir PATH      directory for generated artifacts
+  --config PATH          local JSON config file for thresholds and preferences
   --max-aliases N        maximum alias suggestions to write (default 25)
   --min-frequency N      minimum command frequency for alias eligibility (default 3)
+  --format FORMAT        output format to write: markdown, aliases, or json; repeat for multiple formats
+  --ignore-tool TOOL     tool name to exclude from generated command references; repeat for multiple tools
+  --risk-tolerance MODE  risk filtering preference: balanced or conservative (default balanced)
   --no-alias-file        do not generate alias snippet files
   --json                 also write safe report.json
   --verbose              print extra safe parsing and exclusion summary information

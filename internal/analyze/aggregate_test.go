@@ -89,6 +89,54 @@ func TestAggregateRecordsKeepsRiskyNonSensitiveCommandsAndCountsAliasExclusions(
 	}
 }
 
+func TestAggregateRecordsCanIgnoreConfiguredTools(t *testing.T) {
+	result := AggregateRecords([]model.CommandRecord{
+		rawRecord(model.ShellBash, "/home/alex/.bash_history", "git status"),
+		rawRecord(model.ShellBash, "/home/alex/.bash_history", "docker ps"),
+	}, nil, AggregateOptions{IgnoredTools: []string{" git "}})
+
+	if _, ok := result.CommandAggregates["git status"]; ok {
+		t.Fatal("ignored git command entered safe aggregates")
+	}
+	if _, ok := result.CommandAggregates["docker ps"]; !ok {
+		t.Fatal("non-ignored docker command missing from safe aggregates")
+	}
+	if result.Summary.SafeCommandsAnalyzed != 1 {
+		t.Fatalf("SafeCommandsAnalyzed = %d, want 1", result.Summary.SafeCommandsAnalyzed)
+	}
+	if result.Exclusions.IgnoredToolCommandCount != 1 {
+		t.Fatalf("IgnoredToolCommandCount = %d, want 1", result.Exclusions.IgnoredToolCommandCount)
+	}
+	if got := result.Exclusions.ByReason[model.ExclusionIgnoredTool]; got != 1 {
+		t.Fatalf("ignored tool count = %d, want 1", got)
+	}
+}
+
+func TestAggregateRecordsConservativeRiskToleranceExcludesRiskyCommandsFromReferences(t *testing.T) {
+	const risky = "kubectl delete pod old-worker -n staging"
+
+	result := AggregateRecords([]model.CommandRecord{
+		rawRecord(model.ShellBash, "/home/alex/.bash_history", risky),
+		rawRecord(model.ShellBash, "/home/alex/.bash_history", "git status"),
+	}, nil, AggregateOptions{RiskTolerance: RiskToleranceConservative})
+
+	if _, ok := result.CommandAggregates[risky]; ok {
+		t.Fatal("risky command entered safe aggregates with conservative risk tolerance")
+	}
+	if _, ok := result.CommandAggregates["git status"]; !ok {
+		t.Fatal("safe git command missing from aggregate")
+	}
+	if result.Summary.SafeCommandsAnalyzed != 1 {
+		t.Fatalf("SafeCommandsAnalyzed = %d, want 1", result.Summary.SafeCommandsAnalyzed)
+	}
+	if result.Summary.RiskyCommandsExcluded != 1 {
+		t.Fatalf("RiskyCommandsExcluded = %d, want 1", result.Summary.RiskyCommandsExcluded)
+	}
+	if got := result.Exclusions.ByReason[model.ExclusionRiskyDestructive]; got != 1 {
+		t.Fatalf("risky destructive count = %d, want 1", got)
+	}
+}
+
 func TestAggregateRecordsTreatsSuspiciousControlCharactersAsMalformed(t *testing.T) {
 	result := AggregateRecords([]model.CommandRecord{
 		rawRecord(model.ShellBash, "/home/alex/.bash_history", "git status\x00 --short"),

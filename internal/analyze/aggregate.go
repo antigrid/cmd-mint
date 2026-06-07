@@ -2,22 +2,27 @@ package analyze
 
 import (
 	"sort"
+	"strings"
 
 	"cmd-mint/internal/model"
 )
 
 type AggregateOptions struct {
-	MinFrequency int
+	MinFrequency  int
+	IgnoredTools  []string
+	RiskTolerance string
 }
 
 type AggregateBuilder struct {
-	minFrequency int
-	commands     map[string]*CommandAggregate
-	tools        map[string]*ToolAggregate
-	sources      []model.SourceSummary
-	summary      model.AggregateSummary
-	exclusions   model.ExclusionSummary
-	warnings     []model.Warning
+	minFrequency  int
+	ignoredTools  map[string]struct{}
+	riskTolerance string
+	commands      map[string]*CommandAggregate
+	tools         map[string]*ToolAggregate
+	sources       []model.SourceSummary
+	summary       model.AggregateSummary
+	exclusions    model.ExclusionSummary
+	warnings      []model.Warning
 }
 
 type CommandAggregate struct {
@@ -58,11 +63,17 @@ func NewAggregateBuilder(options AggregateOptions) *AggregateBuilder {
 	if minFrequency < 1 {
 		minFrequency = 1
 	}
+	riskTolerance := options.RiskTolerance
+	if riskTolerance == "" {
+		riskTolerance = RiskToleranceBalanced
+	}
 
 	return &AggregateBuilder{
-		minFrequency: minFrequency,
-		commands:     make(map[string]*CommandAggregate),
-		tools:        make(map[string]*ToolAggregate),
+		minFrequency:  minFrequency,
+		ignoredTools:  normalizedToolSet(options.IgnoredTools),
+		riskTolerance: riskTolerance,
+		commands:      make(map[string]*CommandAggregate),
+		tools:         make(map[string]*ToolAggregate),
 		exclusions: model.ExclusionSummary{
 			ByReason:            make(map[model.ExclusionReason]int),
 			RiskyCategories:     make(map[model.RiskFlag]int),
@@ -125,6 +136,19 @@ func (builder *AggregateBuilder) AddRecord(record model.CommandRecord) {
 	if record.NormalizedCommand == "" || record.DisplayCommand == "" {
 		builder.countReason(model.ExclusionParseFailed)
 		return
+	}
+
+	if builder.isIgnoredTool(record.Tool) {
+		builder.exclusions.IgnoredToolCommandCount++
+		builder.countReason(model.ExclusionIgnoredTool)
+		return
+	}
+
+	if IsRiskyRecord(record) {
+		builder.countRiskyRecord(record)
+		if builder.riskTolerance == RiskToleranceConservative {
+			return
+		}
 	}
 
 	builder.summary.SafeCommandsAnalyzed++
@@ -213,16 +237,16 @@ func (builder *AggregateBuilder) countAliasExclusions(record model.CommandRecord
 		builder.exclusions.MultilineCommandCount++
 		builder.countReason(model.ExclusionMultiline)
 	}
+}
 
-	if IsRiskyRecord(record) {
-		builder.summary.RiskyCommandsExcluded++
-		for _, flag := range record.RiskFlags {
-			builder.exclusions.RiskyCategories[flag]++
-		}
-		for _, reason := range record.ExclusionReasons {
-			if reason == model.ExclusionRiskyDestructive || reason == model.ExclusionRiskyProductionAction {
-				builder.countReason(reason)
-			}
+func (builder *AggregateBuilder) countRiskyRecord(record model.CommandRecord) {
+	builder.summary.RiskyCommandsExcluded++
+	for _, flag := range record.RiskFlags {
+		builder.exclusions.RiskyCategories[flag]++
+	}
+	for _, reason := range record.ExclusionReasons {
+		if reason == model.ExclusionRiskyDestructive || reason == model.ExclusionRiskyProductionAction {
+			builder.countReason(reason)
 		}
 	}
 }
@@ -270,6 +294,27 @@ func (builder *AggregateBuilder) countReason(reason model.ExclusionReason) {
 		builder.exclusions.ByReason = make(map[model.ExclusionReason]int)
 	}
 	builder.exclusions.ByReason[reason]++
+}
+
+func (builder *AggregateBuilder) isIgnoredTool(tool string) bool {
+	_, ok := builder.ignoredTools[normalizeToolName(tool)]
+	return ok
+}
+
+func normalizedToolSet(tools []string) map[string]struct{} {
+	set := make(map[string]struct{})
+	for _, tool := range tools {
+		normalized := normalizeToolName(tool)
+		if normalized == "" {
+			continue
+		}
+		set[normalized] = struct{}{}
+	}
+	return set
+}
+
+func normalizeToolName(tool string) string {
+	return strings.ToLower(strings.TrimSpace(tool))
 }
 
 func shouldAnalyzeRecord(record model.CommandRecord) bool {

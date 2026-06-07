@@ -20,6 +20,7 @@ const (
 	ExclusionUnsupportedShell             ExclusionReason = "unsupported_shell"
 	ExclusionUnreadableSource             ExclusionReason = "unreadable_source"
 	ExclusionMalformedEntry               ExclusionReason = "malformed_entry"
+	ExclusionIgnoredTool                  ExclusionReason = "ignored_tool"
 )
 
 func MVPExclusionReasons() []ExclusionReason {
@@ -41,5 +42,6 @@ func MVPExclusionReasons() []ExclusionReason {
 		ExclusionUnsupportedShell,
 		ExclusionUnreadableSource,
 		ExclusionMalformedEntry,
+		ExclusionIgnoredTool,
 	}
 }

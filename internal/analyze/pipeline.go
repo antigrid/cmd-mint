@@ -9,17 +9,26 @@ import (
 
 const maxCommandsPerToolSection = 10
 
+const (
+	RiskToleranceBalanced     = "balanced"
+	RiskToleranceConservative = "conservative"
+)
+
 type ReportOptions struct {
 	GeneratedAt     time.Time
 	MinFrequency    int
 	MaxAliases      int
+	IgnoredTools    []string
+	RiskTolerance   string
 	ExistingAliases map[string]model.ExistingAliasDefinition
 	Warnings        []model.Warning
 }
 
 func BuildReport(records []model.CommandRecord, sources []model.SourceSummary, options ReportOptions) model.Report {
 	aggregate := AggregateRecords(records, sources, AggregateOptions{
-		MinFrequency: options.MinFrequency,
+		MinFrequency:  options.MinFrequency,
+		IgnoredTools:  options.IgnoredTools,
+		RiskTolerance: options.RiskTolerance,
 	})
 	aliases := GenerateAliasSuggestions(aggregate, AliasOptions{
 		MinFrequency:    options.MinFrequency,

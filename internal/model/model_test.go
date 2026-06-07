@@ -150,6 +150,7 @@ func TestMVPExclusionReasonsIncludeSpecReasons(t *testing.T) {
 		"unsupported_shell",
 		"unreadable_source",
 		"malformed_entry",
+		"ignored_tool",
 	}
 
 	got := MVPExclusionReasons()

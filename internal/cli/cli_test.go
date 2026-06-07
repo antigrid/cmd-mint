@@ -234,6 +234,109 @@ func TestParseFlagsDefaults(t *testing.T) {
 	if result.Options.MinFrequency != 3 {
 		t.Fatalf("MinFrequency = %d, want 3", result.Options.MinFrequency)
 	}
+	if strings.Join(result.Options.OutputFormats, ",") != "markdown,aliases" {
+		t.Fatalf("OutputFormats = %#v, want markdown,aliases", result.Options.OutputFormats)
+	}
+	if result.Options.RiskTolerance != riskToleranceBalanced {
+		t.Fatalf("RiskTolerance = %q, want %q", result.Options.RiskTolerance, riskToleranceBalanced)
+	}
+}
+
+func TestParseFlagsLoadsConfigAndDerivesOutputBooleans(t *testing.T) {
+	dir := t.TempDir()
+	configPath := writeConfigFile(t, dir, `{
+		"ignored_tools": ["git", "kubectl"],
+		"min_frequency": 4,
+		"max_aliases": 8,
+		"output_formats": ["json"],
+		"risk_tolerance": "conservative"
+	}`)
+
+	result, err := parseFlags([]string{"--config", configPath}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("parseFlags returned error: %v", err)
+	}
+
+	if result.Options.MinFrequency != 4 {
+		t.Fatalf("MinFrequency = %d, want 4", result.Options.MinFrequency)
+	}
+	if result.Options.MaxAliases != 8 {
+		t.Fatalf("MaxAliases = %d, want 8", result.Options.MaxAliases)
+	}
+	if strings.Join(result.Options.IgnoredTools, ",") != "git,kubectl" {
+		t.Fatalf("IgnoredTools = %#v, want git,kubectl", result.Options.IgnoredTools)
+	}
+	if !result.Options.JSON {
+		t.Fatal("JSON = false, want true from config output_formats")
+	}
+	if !result.Options.NoAliasFile {
+		t.Fatal("NoAliasFile = false, want true when config omits aliases format")
+	}
+	if result.Options.RiskTolerance != riskToleranceConservative {
+		t.Fatalf("RiskTolerance = %q, want conservative", result.Options.RiskTolerance)
+	}
+}
+
+func TestParseFlagsExplicitFlagsOverrideConfigValues(t *testing.T) {
+	dir := t.TempDir()
+	configPath := writeConfigFile(t, dir, `{
+		"ignored_tools": ["git"],
+		"min_frequency": 9,
+		"max_aliases": 1,
+		"output_formats": ["json"],
+		"risk_tolerance": "conservative"
+	}`)
+
+	result, err := parseFlags([]string{
+		"--config", configPath,
+		"--ignore-tool", "docker",
+		"--min-frequency", "2",
+		"--max-aliases", "5",
+		"--format", "markdown",
+		"--format", "aliases",
+		"--risk-tolerance", "balanced",
+	}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("parseFlags returned error: %v", err)
+	}
+
+	if result.Options.MinFrequency != 2 {
+		t.Fatalf("MinFrequency = %d, want 2", result.Options.MinFrequency)
+	}
+	if result.Options.MaxAliases != 5 {
+		t.Fatalf("MaxAliases = %d, want 5", result.Options.MaxAliases)
+	}
+	if strings.Join(result.Options.IgnoredTools, ",") != "docker" {
+		t.Fatalf("IgnoredTools = %#v, want docker", result.Options.IgnoredTools)
+	}
+	if strings.Join(result.Options.OutputFormats, ",") != "markdown,aliases" {
+		t.Fatalf("OutputFormats = %#v, want markdown,aliases", result.Options.OutputFormats)
+	}
+	if result.Options.JSON {
+		t.Fatal("JSON = true, want false because --format overrides config output_formats")
+	}
+	if result.Options.NoAliasFile {
+		t.Fatal("NoAliasFile = true, want false because aliases format was explicitly selected")
+	}
+	if result.Options.RiskTolerance != riskToleranceBalanced {
+		t.Fatalf("RiskTolerance = %q, want balanced", result.Options.RiskTolerance)
+	}
+}
+
+func TestParseFlagsRejectsConfigWithHistoryDerivedFields(t *testing.T) {
+	dir := t.TempDir()
+	configPath := writeConfigFile(t, dir, `{
+		"history_files": ["/home/alex/.zsh_history"],
+		"min_frequency": 2
+	}`)
+
+	_, err := parseFlags([]string{"--config", configPath}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("parseFlags returned nil error for config containing history_files")
+	}
+	if !strings.Contains(err.Error(), `unknown field "history_files"`) {
+		t.Fatalf("error = %q, want unknown history_files field", err.Error())
+	}
 }
 
 func TestValidationRejectsInvalidShell(t *testing.T) {
@@ -270,6 +373,16 @@ func TestValidationRejectsInvalidFrequencies(t *testing.T) {
 			name: "invalid generated at",
 			args: []string{"--generated-at", "2026-06-01 14:30:22"},
 			want: "--generated-at must be an RFC3339 timestamp",
+		},
+		{
+			name: "invalid output format",
+			args: []string{"--format", "xml"},
+			want: "--format must be one of markdown, aliases, or json",
+		},
+		{
+			name: "invalid risk tolerance",
+			args: []string{"--risk-tolerance", "permissive"},
+			want: "--risk-tolerance must be one of balanced or conservative",
 		},
 	}
 
@@ -430,6 +543,62 @@ func TestRunPipelineWithFixtureHistoriesWritesExpectedFilesAndSummary(t *testing
 	}
 }
 
+func TestRunPipelineAppliesConfigPreferencesToArtifacts(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HISTFILE", "")
+	t.Setenv("SHELL", "")
+
+	dir := t.TempDir()
+	history := filepath.Join(dir, "bash.history")
+	content := strings.Join([]string{
+		"git status",
+		"git status",
+		"git status",
+		"docker ps",
+		"docker ps",
+		"docker ps",
+	}, "\n") + "\n"
+	if err := os.WriteFile(history, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile(%q) error = %v", history, err)
+	}
+	configPath := writeConfigFile(t, dir, `{
+		"ignored_tools": ["git"],
+		"min_frequency": 2,
+		"output_formats": ["markdown", "json"]
+	}`)
+	outputDir := filepath.Join(dir, "report")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run([]string{
+		"--config", configPath,
+		"--history-file", history,
+		"--shell", "bash",
+		"--output-dir", outputDir,
+	}, &stdout, &stderr, version.BuildInfo{})
+
+	if code != ExitOK {
+		t.Fatalf("Run(config pipeline) exit code = %d, want %d\nstderr:\n%s", code, ExitOK, stderr.String())
+	}
+	assertExists(t, filepath.Join(outputDir, output.ArtifactCheatsheet))
+	assertExists(t, filepath.Join(outputDir, output.ArtifactReportJSON))
+	assertNotExists(t, filepath.Join(outputDir, output.ArtifactAliasesSH))
+
+	markdown := readText(t, filepath.Join(outputDir, output.ArtifactCheatsheet))
+	for _, forbidden := range []string{"git status", "alias gs="} {
+		if strings.Contains(markdown, forbidden) {
+			t.Fatalf("markdown contains ignored git content %q:\n%s", forbidden, markdown)
+		}
+	}
+	if !strings.Contains(markdown, "docker ps") {
+		t.Fatalf("markdown missing non-ignored docker command:\n%s", markdown)
+	}
+	reportJSON := readText(t, filepath.Join(outputDir, output.ArtifactReportJSON))
+	if !strings.Contains(reportJSON, `"ignored_tool_command_count": 3`) {
+		t.Fatalf("report JSON missing ignored tool aggregate:\n%s", reportJSON)
+	}
+}
+
 func TestRunPipelineOmitsRawSensitiveCommandsFromSummaryAndArtifacts(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("HISTFILE", "")
@@ -492,8 +661,12 @@ func TestHelpTextIncludesMVPFlagsAndExcludesDeferredFlags(t *testing.T) {
 		"--history-file",
 		"--shell",
 		"--output-dir",
+		"--config",
 		"--max-aliases",
 		"--min-frequency",
+		"--format",
+		"--ignore-tool",
+		"--risk-tolerance",
 		"--no-alias-file",
 		"--json",
 		"--verbose",
@@ -509,7 +682,6 @@ func TestHelpTextIncludesMVPFlagsAndExcludesDeferredFlags(t *testing.T) {
 		"--interactive",
 		"--include-sensitive",
 		"--redact-sensitive",
-		"--config",
 		"--install-aliases",
 		"--follow-sourced-config",
 		"--cloud",
@@ -525,6 +697,16 @@ func writeTempHistoryFile(t *testing.T, dir string, name string) string {
 
 	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte("git status\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile(%q) error = %v", path, err)
+	}
+	return path
+}
+
+func writeConfigFile(t *testing.T, dir string, content string) string {
+	t.Helper()
+
+	path := filepath.Join(dir, "cmd-mint.config.json")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("WriteFile(%q) error = %v", path, err)
 	}
 	return path

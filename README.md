@@ -83,8 +83,12 @@ cmd-mint \
 | `--history-file PATH` | none | Adds an explicit history file to scan. Repeat the flag for multiple files. |
 | `--shell bash\|zsh\|fish\|auto` | `auto` | Interprets explicit history files. Auto-discovered files use known shell type where possible. |
 | `--output-dir PATH` | timestamped directory in current directory | Writes artifacts to the given directory. Creates it when needed. Fails if the path is an existing regular file. |
+| `--config PATH` | none | Loads a local JSON config file for thresholds and preferences. CLI flags override config values. |
 | `--max-aliases N` | `25` | Maximum alias suggestions written to alias files. Use `0` to write only alias file headers. |
 | `--min-frequency N` | `3` | Minimum exact normalized command frequency for alias eligibility. Must be at least `1`. |
+| `--format markdown\|aliases\|json` | `markdown`, `aliases` | Selects generated output formats. Repeat the flag for multiple formats. |
+| `--ignore-tool TOOL` | none | Excludes a tool from generated command-reference sections and aliases. Repeat for multiple tools. |
+| `--risk-tolerance balanced\|conservative` | `balanced` | `balanced` labels risky non-sensitive commands and excludes them from aliases; `conservative` also excludes them from generated command-reference sections. |
 | `--no-alias-file` | `false` | Skips alias snippet file generation. The cheat sheet can still include alias suggestions. |
 | `--json` | `false` | Also writes safe `report.json`. |
 | `--verbose` | `false` | Prints more parsing and exclusion summary information without raw sensitive commands. |
@@ -92,18 +96,34 @@ cmd-mint \
 | `--version` | `false` | Prints version, commit, and build date, then exits. |
 | `--help` | `false` | Prints help, then exits. |
 
+## Config File
+
+Use `--config PATH` to load local JSON preferences. The config file is intentionally limited to thresholds and preferences; history-derived fields are rejected as unknown fields and should not be stored there.
+
+```json
+{
+  "ignored_tools": ["kubectl"],
+  "min_frequency": 4,
+  "max_aliases": 10,
+  "output_formats": ["markdown", "aliases", "json"],
+  "risk_tolerance": "conservative"
+}
+```
+
+CLI flags override config values. For example, `--min-frequency 2` overrides `min_frequency`, repeated `--format` flags override `output_formats`, and `--json` adds JSON output for compatibility with the existing flag.
+
 ## Generated Files
 
 `cmd-mint` writes generated files into the report directory with owner-only permissions where the platform supports them.
 
 | File | When generated | Purpose |
 |---|---|---|
-| `cheatsheet.md` | Always | Human-readable summary grouped by source, tool, aliases, patterns, and exclusions. |
-| `aliases.suggested.sh` | By default | Bash/zsh-compatible alias suggestions. Not installed automatically. |
-| `aliases.suggested.fish` | Fish input is detected or `--shell fish` is used | Fish-compatible alias suggestions. Not installed automatically. |
-| `report.json` | Only with `--json` | Safe machine-readable report for tests, debugging, and future integrations. |
+| `cheatsheet.md` | Default; when `markdown` format is selected | Human-readable summary grouped by source, tool, aliases, patterns, and exclusions. |
+| `aliases.suggested.sh` | Default; when `aliases` format is selected | Bash/zsh-compatible alias suggestions. Not installed automatically. |
+| `aliases.suggested.fish` | `aliases` format plus fish input or `--shell fish` | Fish-compatible alias suggestions. Not installed automatically. |
+| `report.json` | Only with `--json` or `json` format | Safe machine-readable report for tests, debugging, and future integrations. |
 
-The report summarizes skipped sensitive commands only in aggregate. Risky non-sensitive commands may appear in `cheatsheet.md` and `report.json` only as observed commands labeled as risky and excluded from alias suggestions. They are never emitted as alias suggestions or presented as recommended shortcuts.
+The `report.json` contract is documented in `docs/report.schema.json`. The report summarizes skipped sensitive commands only in aggregate. Risky non-sensitive commands may appear in `cheatsheet.md` and `report.json` only as observed commands labeled as risky and excluded from alias suggestions. They are never emitted as alias suggestions or presented as recommended shortcuts.
 
 Generated output ordering is deterministic for the same inputs and flags. The default report timestamp and default timestamped output directory are intentionally run-specific; pass both `--output-dir` and `--generated-at` when you need byte-for-byte reproducible artifacts.
 
